@@ -1,5 +1,17 @@
 {
+    "environments": {
+        "Development": { "base": "https://services-claims-dev.selective.com/claims/apis" },
+        "Test":        { "base": "https://services-claims-qa.selective.com/claims/apis" },
+        "Staging":     { "base": "https://services-claims-staging.selective.com/claims/apis" },
+        "Production":  { "base": "https://services-claims.selective.com/claims/apis" }
+    },
   "endpoints": [
+
+    { "name": "Policy • Process (QA)", "method": "GET", "environment": "Test", "path": "/process/policy/health" },
+    { "name": "Claims • Intakes (QA)", "method": "GET", "environment": "Test", "path": "/claims/intakes/health" },
+
+    { "name": "Identity • Token (QA override)", "method": "GET", "environment": "Test", "url": "https://httpbin.org/get?svc=identity&ep=token&env=test" },
+
 
     { "name": "Identity • Token (Dev)",        "method": "GET", "environment": "Development", "url": "https://httpbin.org/get?svc=identity&ep=token&env=dev" },
     { "name": "Identity • Token (Test)",       "method": "GET", "environment": "Test",        "url": "https://httpbin.org/get?svc=identity&ep=token&env=test" },

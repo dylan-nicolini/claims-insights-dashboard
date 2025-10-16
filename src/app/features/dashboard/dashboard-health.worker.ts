@@ -1,26 +1,32 @@
-// Web Worker: fetch each endpoint and measure latency.
-// NOTE: This runs in a worker context (no DOM).
+/// <reference lib="webworker" />
 
-type WorkerRequest = { id: string; method: string; url: string };
-type HealthStatus = 'UP'|'DEGRADED'|'DOWN'|'UNKNOWN';
+// Simple worker that does a quick check (status + latency)
+// It does NOT expose headers or HTTP code (those are captured in detailedCheck on main thread)
 
-self.addEventListener('message', async (ev: MessageEvent<WorkerRequest>) => {
-  const { id, method, url } = ev.data;
+addEventListener('message', async ({ data }) => {
+  const { id, method, url } = data as { id: string; method: string; url: string };
+
   const start = performance.now();
+  let status: 'UP'|'DEGRADED'|'DOWN' = 'DOWN';
+  let latencyMs = 0;
+
   try {
     const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 15000); // 15s hard timeout
+    const t = setTimeout(() => ctrl.abort(), 15000);
     const res = await fetch(url, { method, signal: ctrl.signal, cache: 'no-store' });
-    clearTimeout(timeout);
-    const ms = Math.round(performance.now() - start);
+    clearTimeout(t);
 
-    let status: HealthStatus = 'UP';
-    if (!res.ok) status = 'DOWN';
-    else if (ms > 1200) status = 'DEGRADED';
+    latencyMs = Math.round(performance.now() - start);
 
-    (self as any).postMessage({ id, status, latencyMs: ms });
+    if (!res.ok) {
+      status = 'DOWN';
+    } else {
+      status = latencyMs > 1200 ? 'DEGRADED' : 'UP';
+    }
   } catch {
-    const ms = Math.round(performance.now() - start);
-    (self as any).postMessage({ id, status: 'DOWN', latencyMs: ms });
+    latencyMs = Math.round(performance.now() - start);
+    status = 'DOWN';
   }
+
+  postMessage({ id, status, latencyMs });
 });

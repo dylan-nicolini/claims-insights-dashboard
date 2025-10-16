@@ -1,46 +1,59 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 
+/* ── Types ─────────────────────────────────────────────────────── */
+
 export type HealthStatus = 'UP' | 'DEGRADED' | 'DOWN' | 'UNKNOWN';
+
+export interface EnvConfig {
+  /** e.g., "https://services-claims-qa.selective.com/claims/apis" (no trailing slash required) */
+  base: string;
+  // You can extend later with headers, timeouts, etc.
+}
+
+export interface AssetsConfig {
+  /** Optional map of environment name → base URL */
+  environments?: Record<string, EnvConfig>;
+  /** Endpoint list; supports both legacy (absolute url) and new (env+path) styles */
+  endpoints: EndpointConfig[];
+}
 
 export interface EndpointConfig {
   name: string;
   method: 'GET'|'POST'|'PUT'|'DELETE'|'PATCH'|'HEAD';
-  url: string;
+  /** Legacy/override: if absolute, this takes precedence and is used as-is */
+  url?: string;
+  /** New compact style: environment + path are combined with environments[env].base */
   environment?: string;
-}
-
-export interface AssetsConfig {
-  endpoints: EndpointConfig[];
+  path?: string;
 }
 
 export interface EndpointRow {
   name: string;
   method: string;
-  url: string;
+  url: string;            // resolved absolute URL used for checks
   status: HealthStatus;
   latencyMs?: number;
 }
 
-/** Rich result used in the details dialog and history */
+/** Rich result for dialog/history */
 export interface DetailedCheck {
   url: string;
   method: string;
   status: HealthStatus;
   latencyMs: number;
-  /** HTTP status code when available (e.g., 200, 503). -1 if unavailable. */
-  httpCode: number;
-  /** A trimmed, readable subset of headers. */
-  headers: Record<string, string>;
-  /** ISO timestamp of the measurement */
-  at: string;
+  httpCode: number;                 // -1 if unknown
+  headers: Record<string, string>;  // small readable subset
+  at: string;                       // ISO timestamp
 }
+
+/* ── Service ───────────────────────────────────────────────────── */
 
 @Injectable({ providedIn: 'root' })
 export class DashboardHealthService {
   private worker: Worker | null = null;
 
-  /** Keep last 5 checks per URL (ring buffer behavior) */
+  /** Keep last 5 checks per URL (in-memory) */
   private history = new Map<string, DetailedCheck[]>();
 
   constructor(private http: HttpClient) {
@@ -59,29 +72,38 @@ export class DashboardHealthService {
     return this.http.get<AssetsConfig>('assets/apis.json').toPromise() as Promise<AssetsConfig>;
   }
 
-  /** Build base rows for the table */
+  /**
+   * Build resolved rows from config:
+   * - Accepts both new (env + path) and legacy (full url) shapes
+   * - Row-level absolute `url` overrides env base
+   */
   buildRows(cfg: AssetsConfig): EndpointRow[] {
-    return (cfg.endpoints ?? []).map(e => ({
-      name: e.name,
-      method: e.method,
-      url: e.url,
-      status: 'UNKNOWN'
-    }));
+    const envs = cfg.environments ?? {};
+    const rows: EndpointRow[] = [];
+
+    for (const e of cfg.endpoints ?? []) {
+      const resolved = this.resolveEndpointUrl(e, envs);
+      if (!resolved) {
+        console.warn('[health] invalid endpoint config skipped:', e);
+        continue;
+      }
+      rows.push({
+        name: e.name,
+        method: e.method,
+        url: resolved,
+        status: 'UNKNOWN'
+      });
+    }
+    return rows;
   }
 
-  /**
-   * Fast status check used by the table sweep (uses worker if available).
-   * Returns only status + latency.
-   */
+  /** Fast status check used by dashboard/API grid */
   check(row: EndpointRow): Promise<EndpointRow> {
     if (!this.worker) return this.checkInMainThread(row);
     return this.checkWithWorker(row, this.worker);
   }
 
-  /**
-   * Detailed check run from the dialog to capture httpCode + headers.
-   * Always runs in the main thread (so we can access headers).
-   */
+  /** Detailed check (for dialog): captures HTTP code + a few headers */
   async detailedCheck(method: string, url: string, timeoutMs = 15000): Promise<DetailedCheck> {
     const start = performance.now();
     let httpCode = -1;
@@ -96,7 +118,6 @@ export class DashboardHealthService {
 
       httpCode = res.status;
 
-      // Collect a tiny, readable set of headers
       const wanted = ['content-type', 'date', 'server', 'cache-control'];
       res.headers.forEach((v, k) => {
         if (wanted.includes(k.toLowerCase())) headers[k] = v;
@@ -104,38 +125,50 @@ export class DashboardHealthService {
 
       const ms = Math.round(performance.now() - start);
 
-      if (!res.ok) {
-        status = 'DOWN';
-      } else {
-        status = ms > 1200 ? 'DEGRADED' : 'UP';
-      }
+      if (!res.ok) status = 'DOWN';
+      else status = ms > 1200 ? 'DEGRADED' : 'UP';
 
-      const entry: DetailedCheck = {
-        url, method, status, latencyMs: ms,
-        httpCode, headers,
-        at: new Date().toISOString()
-      };
+      const entry: DetailedCheck = { url, method, status, latencyMs: ms, httpCode, headers, at: new Date().toISOString() };
       this.pushHistory(url, entry);
       return entry;
-
     } catch {
       const ms = Math.round(performance.now() - start);
-      const entry: DetailedCheck = {
-        url, method, status: 'DOWN', latencyMs: ms,
-        httpCode, headers: {},
-        at: new Date().toISOString()
-      };
+      const entry: DetailedCheck = { url, method, status: 'DOWN', latencyMs: ms, httpCode, headers: {}, at: new Date().toISOString() };
       this.pushHistory(url, entry);
       return entry;
     }
   }
 
-  /** Return most-recent-first history (up to 5) for a given URL */
+  /** Return last 5 checks (most recent first) */
   getHistory(url: string): DetailedCheck[] {
     return this.history.get(url) ?? [];
   }
 
-  /* ── internals ───────────────────────────────────────────────────────── */
+  /* ── Internals ───────────────────────────────────────────────── */
+
+  private resolveEndpointUrl(e: EndpointConfig, envs: Record<string, EnvConfig>): string | null {
+    // 1) Absolute URL override (or legacy style)
+    if (e.url && isAbsoluteUrl(e.url)) {
+      return e.url;
+    }
+
+    // 2) New compact: environment + path
+    if (e.environment && e.path) {
+      const env = envs[e.environment];
+      if (!env?.base) return null;
+      return joinUrl(env.base, e.path);
+    }
+
+    // 3) If url exists but is relative (rare), attempt env join if possible
+    if (e.url && !isAbsoluteUrl(e.url) && e.environment) {
+      const env = envs[e.environment];
+      if (!env?.base) return null;
+      return joinUrl(env.base, e.url);
+    }
+
+    // Not enough info to resolve
+    return null;
+  }
 
   private pushHistory(url: string, entry: DetailedCheck) {
     const list = this.history.get(url) ?? [];
@@ -177,4 +210,16 @@ export class DashboardHealthService {
       return { ...row, status: 'DOWN', latencyMs: ms };
     }
   }
+}
+
+/* ── URL helpers ───────────────────────────────────────────────── */
+
+function isAbsoluteUrl(u: string): boolean {
+  return /^https?:\/\//i.test(u);
+}
+
+function joinUrl(base: string, path: string): string {
+  const b = base.replace(/\/+$/, '');                 // trim trailing slashes
+  const p = path.startsWith('/') ? path : '/' + path; // ensure leading slash
+  return b + p;
 }

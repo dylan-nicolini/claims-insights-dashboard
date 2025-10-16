@@ -10,9 +10,7 @@ import { DashboardHealthService, HealthStatus, DetailedCheck } from '../dashboar
 export interface ApiDetailsData {
   name: string;
   method: string;
-  url: string;
-  baseUrl: string;
-  path: string;
+  url: string;          // absolute URL
   environment: string;
   status: HealthStatus;
   latencyMs?: number;
@@ -32,12 +30,29 @@ export class ApiDetailsDialogComponent {
   history = signal<DetailedCheck[]>([]);
   latest = computed(() => this.history()[0]);
 
+  // derive base + path locally from the absolute URL
+  baseUrl = computed(() => {
+    try {
+      const u = new URL(this.data.url);
+      return `${u.origin}`;
+    } catch {
+      return this.data.url;
+    }
+  });
+  path = computed(() => {
+    try {
+      const u = new URL(this.data.url);
+      return `${u.pathname}${u.search}${u.hash}`;
+    } catch {
+      return '';
+    }
+  });
+
   constructor(
     private ref: MatDialogRef<ApiDetailsDialogComponent>,
     @Inject(MAT_DIALOG_DATA) public data: ApiDetailsData,
     private health: DashboardHealthService
   ) {
-    // Seed the history with the current snapshot if available
     const seed: DetailedCheck | null = this.data.latencyMs != null
       ? {
           url: this.data.url,
@@ -65,10 +80,8 @@ export class ApiDetailsDialogComponent {
       this.checking.set(true);
       this.lastError.set(null);
       const result = await this.health.detailedCheck(this.data.method, this.data.url);
-      // Update live fields in dialog
       this.data.status = result.status;
       this.data.latencyMs = result.latencyMs;
-      // Refresh local history (service already pushed the entry)
       this.history.set(this.health.getHistory(this.data.url));
     } catch (e: any) {
       this.lastError.set(e?.message ?? 'Check failed.');

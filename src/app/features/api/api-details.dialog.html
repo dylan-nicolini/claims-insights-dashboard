@@ -27,14 +27,13 @@
     <div class="row url">
       <div class="label">URL</div>
       <div class="value mono">
-        <a [href]="data.baseUrl" target="_blank" rel="noopener">{{ data.baseUrl }}</a>{{ data.path }}
+        <a [href]="baseUrl()" target="_blank" rel="noopener">{{ baseUrl() }}</a>{{ path() }}
       </div>
     </div>
   </div>
 
   <mat-divider></mat-divider>
 
-  <!-- Headers -->
   <div class="section">
     <div class="section-title">Response Headers</div>
     <div class="headers" *ngIf="latest()?.headers && headerEntries(latest()!.headers).length; else noheaders">
@@ -48,7 +47,6 @@
     </ng-template>
   </div>
 
-  <!-- History -->
   <div class="section">
     <div class="section-title">Last 5 Checks</div>
     <div class="history" *ngIf="history().length; else noh">

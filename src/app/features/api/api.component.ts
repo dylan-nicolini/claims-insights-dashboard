@@ -15,6 +15,15 @@ import { ApiDetailsDialogComponent, ApiDetailsData } from './api-details.dialog'
 
 type ApiRow = EndpointRow & { baseUrl: string; path: string; environment: string };
 
+type RowForDialog = {
+  name: string;
+  method: string;
+  url: string;          // absolute URL
+  environment: string;  // make sure your row includes this
+  status: HealthStatus;
+  latencyMs?: number;
+};
+
 @Component({
   selector: 'app-api',
   standalone: true,
@@ -37,19 +46,22 @@ export class ApiComponent implements OnInit {
 // inside class:
 private dialog = inject(MatDialog);
 
-openDetails(r: ApiRow) {
-  const data: ApiDetailsData = {
-    name: r.name,
-    method: r.method,
-    url: r.url,
-    baseUrl: r.baseUrl,
-    path: r.path,
-    environment: r.environment,
-    status: r.status,
-    latencyMs: r.latencyMs
-  };
-  this.dialog.open(ApiDetailsDialogComponent, { data, panelClass: 'api-details-panel' });
+openDetails(row: RowForDialog) {
+  this.dialog.open(ApiDetailsDialogComponent, {
+    data: {
+      name: row.name,
+      method: row.method,
+      url: row.url,
+      environment: row.environment,
+      status: row.status,
+      latencyMs: row.latencyMs
+      // ⛔️ Do NOT pass baseUrl or path — the dialog derives both from `url`
+    },
+    panelClass: 'api-details-panel',
+    autoFocus: false
+  });
 }
+
 
   // page/config
   loadingCfg = signal(true);
