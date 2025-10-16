@@ -1,0 +1,71 @@
+<mat-card class="data-card">
+  <mat-card-header class="data-card__header">
+    <mat-card-title>API Endpoints</mat-card-title>
+    <div class="data-card__actions">
+      <mat-form-field appearance="outline" class="search-field" subscriptSizing="dynamic">
+        <mat-label>Search</mat-label>
+        <input matInput (input)="onSearchInput($event)" placeholder="name, path…" />
+      </mat-form-field>
+      <button mat-stroked-button (click)="sweep()">
+        <mat-icon>refresh</mat-icon>
+        Refresh
+      </button>
+    </div>
+  </mat-card-header>
+
+  <mat-card-content>
+    <div *ngIf="loading()" class="muted">Loading configuration…</div>
+    <div *ngIf="error()" class="error">Error: {{ error() }}</div>
+
+    <div class="table-wrap" *ngIf="!loading() && !error()">
+      <table mat-table [dataSource]="filtered()" class="mat-elevation-z0">
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef> Name </th>
+          <td mat-cell *matCellDef="let r">
+            <div class="cell-main">
+              <div class="title">{{ r.name }}</div>
+              <div class="sub muted">{{ r.url }}</div>
+            </div>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="method">
+          <th mat-header-cell *matHeaderCellDef> Method </th>
+          <td mat-cell *matCellDef="let r"><code>{{ r.method }}</code></td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef> Status </th>
+          <td mat-cell *matCellDef="let r">
+            <span [ngClass]="statusClass(r.status)"><span class="dot"></span>{{ r.status }}</span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="latency">
+          <th mat-header-cell *matHeaderCellDef> Latency </th>
+          <td mat-cell *matCellDef="let r">
+            <ng-container *ngIf="r.latencyMs !== undefined; else skeleton">
+              {{ r.latencyMs }} ms
+            </ng-container>
+            <ng-template #skeleton>
+              <span class="skeleton" style="width: 60px;"></span>
+            </ng-template>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef> </th>
+          <td mat-cell *matCellDef="let r" class="actions">
+            <a mat-stroked-button [href]="r.url" target="_blank" rel="noopener">Open</a>
+            <button mat-icon-button matTooltip="Re-check" (click)="recheck(r)">
+              <mat-icon>refresh</mat-icon>
+            </button>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="['name','method','status','latency','actions']"></tr>
+        <tr mat-row *matRowDef="let row; columns: ['name','method','status','latency','actions'];"></tr>
+      </table>
+    </div>
+  </mat-card-content>
+</mat-card>

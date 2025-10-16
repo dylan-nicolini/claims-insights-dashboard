@@ -1,0 +1,45 @@
+<mat-sidenav-container class="shell-container">
+  <mat-sidenav #drawer class="app-sidenav" mode="side" [opened]="true">
+    <div class="sidenav-header">
+      <img src="assets/selective-logo.svg" alt="Selective" height="28" />
+    </div>
+
+    <mat-nav-list>
+      <a mat-list-item routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{exact:true}">
+        <mat-icon>dashboard</mat-icon><span>Dashboard</span>
+      </a>
+      <a mat-list-item routerLink="/api" routerLinkActive="active">
+        <mat-icon>api</mat-icon><span>API</span>
+      </a>
+      <mat-divider></mat-divider>
+      <a mat-list-item routerLink="/tools" routerLinkActive="active">
+        <mat-icon>build</mat-icon><span>Tools</span>
+      </a>
+      <a mat-list-item routerLink="/settings" routerLinkActive="active">
+        <mat-icon>settings</mat-icon><span>Settings</span>
+      </a>
+    </mat-nav-list>
+  </mat-sidenav>
+
+  <mat-sidenav-content>
+    <mat-toolbar class="app-chrome">
+      <button class="only-mobile" mat-icon-button (click)="drawer.toggle()" aria-label="Open navigation">
+        <mat-icon>menu</mat-icon>
+      </button>
+
+      <div class="brand">
+        <img src="assets/selective-logo.svg" alt="Selective" height="28" />
+        <strong class="product">Claims Insights Hub</strong>
+      </div>
+
+      <span class="spacer"></span>
+
+      <button mat-icon-button aria-label="Notifications"><mat-icon>notifications</mat-icon></button>
+      <button mat-icon-button aria-label="Account"><mat-icon>account_circle</mat-icon></button>
+    </mat-toolbar>
+
+    <div class="container">
+      <router-outlet></router-outlet>
+    </div>
+  </mat-sidenav-content>
+</mat-sidenav-container>

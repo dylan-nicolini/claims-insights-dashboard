@@ -1,6 +1,17 @@
 import { bootstrapApplication } from '@angular/platform-browser';
-import { appConfig } from './app/app.config';
-import { App } from './app/app';
+import { provideRouter } from '@angular/router';
+import { provideAnimations } from '@angular/platform-browser/animations';
+import { provideZonelessChangeDetection } from '@angular/core';
+import { provideHttpClient } from '@angular/common/http';
 
-bootstrapApplication(App, appConfig)
-  .catch((err) => console.error(err));
+import { routes } from './app/app.routes';
+import { ShellComponent } from './app/shell/shell.component';
+
+bootstrapApplication(ShellComponent, {
+  providers: [
+    provideRouter(routes),
+    provideAnimations(),
+    provideZonelessChangeDetection(),
+    provideHttpClient(),
+  ],
+}).catch(err => console.error(err));

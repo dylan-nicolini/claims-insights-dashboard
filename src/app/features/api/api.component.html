@@ -1,0 +1,103 @@
+<mat-card class="api-card">
+  <mat-card-header class="api-card__header">
+    <div class="left">
+      <div class="brand-row">
+        <img src="assets/selective-logo.svg" alt="Selective" height="20" />
+        <span class="product">BE UNIQUELY INSURED®</span>
+      </div>
+      <h2 class="title">API Endpoints</h2>
+    </div>
+
+    <div class="right">
+      <div class="meta">
+        <span class="muted">Last checked:</span>
+        <span>{{ lastCheckedAt() ? (lastCheckedAt()! | date:'shortTime') : '—' }}</span>
+      </div>
+
+      <mat-form-field appearance="outline" class="env-field" subscriptSizing="dynamic">
+        <mat-label>Environment</mat-label>
+        <mat-select [value]="environment()" (valueChange)="environment.set($event)">
+          <mat-option *ngFor="let e of environments()" [value]="e">{{ e }}</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <button mat-stroked-button (click)="sweep()" class="refresh-btn" matTooltip="Re-run health checks">
+        <mat-icon>refresh</mat-icon>
+        Refresh
+      </button>
+    </div>
+  </mat-card-header>
+
+  <mat-card-content>
+    <div *ngIf="loading()" class="muted">Loading endpoints…</div>
+    <div *ngIf="error()" class="error">Error: {{ error() }}</div>
+
+    <div class="table-wrap" *ngIf="!loading() && !error()">
+      <table mat-table [dataSource]="filteredRows()" class="mat-elevation-z0">
+
+        <!-- Name -->
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef> Name </th>
+          <td mat-cell *matCellDef="let r">
+            <div class="cell-main">
+              <div class="title">{{ r.name }}</div>
+            </div>
+          </td>
+        </ng-container>
+
+        <!-- Method -->
+        <ng-container matColumnDef="method">
+          <th mat-header-cell *matHeaderCellDef> Method </th>
+          <td mat-cell *matCellDef="let r">
+            <code>{{ r.method }}</code>
+          </td>
+        </ng-container>
+
+        <!-- Base URL -->
+        <ng-container matColumnDef="base">
+          <th mat-header-cell *matHeaderCellDef> Base URL </th>
+          <td mat-cell *matCellDef="let r">
+            <a [href]="r.baseUrl" target="_blank" rel="noopener">{{ r.baseUrl }}</a>
+          </td>
+        </ng-container>
+
+        <!-- Path -->
+        <ng-container matColumnDef="path">
+          <th mat-header-cell *matHeaderCellDef> Path </th>
+          <td mat-cell *matCellDef="let r">
+            <span class="mono">{{ r.path }}</span>
+          </td>
+        </ng-container>
+
+        <!-- Status -->
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef> Status </th>
+          <td mat-cell *matCellDef="let r">
+            <span [ngClass]="statusClass(r.status)"><span class="dot"></span>{{ r.status }}</span>
+          </td>
+        </ng-container>
+
+        <!-- Open -->
+        <ng-container matColumnDef="open">
+          <th mat-header-cell *matHeaderCellDef></th>
+          <td mat-cell *matCellDef="let r" class="actions">
+            <button mat-icon-button matTooltip="Open endpoint" (click)="open(r)">
+              <mat-icon>open_in_new</mat-icon>
+            </button>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="['name','method','base','path','status','open']"></tr>
+        <tr mat-row *matRowDef="let row; columns: ['name','method','base','path','status','open'];"></tr>
+      </table>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend" *ngIf="!loading() && !error()">
+      <span class="pill ok"><span class="dot"></span>UP <b>{{ upCount() }}</b></span>
+      <span class="pill warn"><span class="dot"></span>DEGRADED <b>{{ degradedCount() }}</b></span>
+      <span class="pill down"><span class="dot"></span>DOWN <b>{{ downCount() }}</b></span>
+      <span class="total muted">Total: {{ totalCount() }}</span>
+    </div>
+  </mat-card-content>
+</mat-card>
