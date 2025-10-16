@@ -1,0 +1,81 @@
+<div class="hdr">
+  <div class="title">
+    <div class="eyebrow">API Endpoint</div>
+    <h3>{{ data.name }}</h3>
+  </div>
+  <button mat-icon-button (click)="close()" aria-label="Close"><mat-icon>close</mat-icon></button>
+</div>
+
+<mat-dialog-content class="dialog-body">
+  <div class="meta">
+    <div class="row">
+      <div class="label">Method</div>
+      <div class="value"><code>{{ data.method }}</code></div>
+    </div>
+    <div class="row">
+      <div class="label">Environment</div>
+      <div class="value">{{ data.environment }}</div>
+    </div>
+    <div class="row">
+      <div class="label">Status</div>
+      <div class="value">
+        <span [ngClass]="statusClass(data.status)"><span class="dot"></span>{{ data.status }}</span>
+        <span class="latency" *ngIf="data.latencyMs != null">· {{ data.latencyMs }} ms</span>
+        <span class="http" *ngIf="latest()?.httpCode != null && latest()!.httpCode >= 0">· HTTP {{ latest()!.httpCode }}</span>
+      </div>
+    </div>
+    <div class="row url">
+      <div class="label">URL</div>
+      <div class="value mono">
+        <a [href]="data.baseUrl" target="_blank" rel="noopener">{{ data.baseUrl }}</a>{{ data.path }}
+      </div>
+    </div>
+  </div>
+
+  <mat-divider></mat-divider>
+
+  <!-- Headers -->
+  <div class="section">
+    <div class="section-title">Response Headers</div>
+    <div class="headers" *ngIf="latest()?.headers && headerEntries(latest()!.headers).length; else noheaders">
+      <div class="kv" *ngFor="let kv of headerEntries(latest()!.headers)">
+        <div class="k mono">{{ kv[0] }}</div>
+        <div class="v mono">{{ kv[1] }}</div>
+      </div>
+    </div>
+    <ng-template #noheaders>
+      <div class="muted small">No headers captured yet. Run “Re-check (detailed)”.</div>
+    </ng-template>
+  </div>
+
+  <!-- History -->
+  <div class="section">
+    <div class="section-title">Last 5 Checks</div>
+    <div class="history" *ngIf="history().length; else noh">
+      <div class="hrow" *ngFor="let h of history()">
+        <div class="when">{{ h.at | date:'short' }}</div>
+        <div class="badge" [ngClass]="{'ok': h.status==='UP', 'warn': h.status==='DEGRADED', 'down': h.status==='DOWN'}">{{ h.status }}</div>
+        <div class="lat">{{ h.latencyMs }} ms</div>
+        <div class="code" *ngIf="h.httpCode >= 0">HTTP {{ h.httpCode }}</div>
+      </div>
+    </div>
+    <ng-template #noh>
+      <div class="muted small">No history yet.</div>
+    </ng-template>
+  </div>
+</mat-dialog-content>
+
+<mat-divider></mat-divider>
+
+<mat-dialog-actions align="start" class="actions">
+  <button mat-stroked-button (click)="openUrl()">
+    <mat-icon>open_in_new</mat-icon> Open
+  </button>
+  <button mat-stroked-button (click)="copyUrl()" matTooltip="Copy full URL to clipboard">
+    <mat-icon>content_copy</mat-icon> Copy URL
+  </button>
+  <button mat-flat-button color="primary" (click)="recheckDetailed()" [disabled]="checking()">
+    <mat-icon>refresh</mat-icon> {{ checking() ? 'Checking…' : 'Re-check (detailed)' }}
+  </button>
+  <span class="err" *ngIf="lastError()">{{ lastError() }}</span>
+</mat-dialog-actions>

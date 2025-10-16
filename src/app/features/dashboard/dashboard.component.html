@@ -1,71 +1,77 @@
-<mat-card class="data-card">
-  <mat-card-header class="data-card__header">
-    <mat-card-title>API Endpoints</mat-card-title>
-    <div class="data-card__actions">
-      <mat-form-field appearance="outline" class="search-field" subscriptSizing="dynamic">
-        <mat-label>Search</mat-label>
-        <input matInput (input)="onSearchInput($event)" placeholder="name, path…" />
-      </mat-form-field>
-      <button mat-stroked-button (click)="sweep()">
+<mat-card class="dash-card">
+  <div class="dash-header">
+    <div class="left">
+      <h2 class="title">Overview</h2>
+      <div class="muted small">
+        Last checked: {{ lastCheckedAt() ? (lastCheckedAt()! | date:'shortTime') : '—' }}
+      </div>
+    </div>
+
+    <div class="right">
+      <button mat-stroked-button (click)="refresh()">
         <mat-icon>refresh</mat-icon>
         Refresh
       </button>
     </div>
-  </mat-card-header>
+  </div>
 
-  <mat-card-content>
-    <div *ngIf="loading()" class="muted">Loading configuration…</div>
-    <div *ngIf="error()" class="error">Error: {{ error() }}</div>
+  <mat-progress-bar *ngIf="inProgress()" mode="determinate" [value]="progressPct()" class="progress"></mat-progress-bar>
 
-    <div class="table-wrap" *ngIf="!loading() && !error()">
-      <table mat-table [dataSource]="filtered()" class="mat-elevation-z0">
-        <ng-container matColumnDef="name">
-          <th mat-header-cell *matHeaderCellDef> Name </th>
-          <td mat-cell *matCellDef="let r">
-            <div class="cell-main">
-              <div class="title">{{ r.name }}</div>
-              <div class="sub muted">{{ r.url }}</div>
-            </div>
-          </td>
-        </ng-container>
-
-        <ng-container matColumnDef="method">
-          <th mat-header-cell *matHeaderCellDef> Method </th>
-          <td mat-cell *matCellDef="let r"><code>{{ r.method }}</code></td>
-        </ng-container>
-
-        <ng-container matColumnDef="status">
-          <th mat-header-cell *matHeaderCellDef> Status </th>
-          <td mat-cell *matCellDef="let r">
-            <span [ngClass]="statusClass(r.status)"><span class="dot"></span>{{ r.status }}</span>
-          </td>
-        </ng-container>
-
-        <ng-container matColumnDef="latency">
-          <th mat-header-cell *matHeaderCellDef> Latency </th>
-          <td mat-cell *matCellDef="let r">
-            <ng-container *ngIf="r.latencyMs !== undefined; else skeleton">
-              {{ r.latencyMs }} ms
-            </ng-container>
-            <ng-template #skeleton>
-              <span class="skeleton" style="width: 60px;"></span>
-            </ng-template>
-          </td>
-        </ng-container>
-
-        <ng-container matColumnDef="actions">
-          <th mat-header-cell *matHeaderCellDef> </th>
-          <td mat-cell *matCellDef="let r" class="actions">
-            <a mat-stroked-button [href]="r.url" target="_blank" rel="noopener">Open</a>
-            <button mat-icon-button matTooltip="Re-check" (click)="recheck(r)">
-              <mat-icon>refresh</mat-icon>
-            </button>
-          </td>
-        </ng-container>
-
-        <tr mat-header-row *matHeaderRowDef="['name','method','status','latency','actions']"></tr>
-        <tr mat-row *matRowDef="let row; columns: ['name','method','status','latency','actions'];"></tr>
-      </table>
+  <section class="tiles">
+    <div class="tile total">
+      <div class="label">Total</div>
+      <div class="value">{{ total() }}</div>
     </div>
-  </mat-card-content>
+
+    <div class="tile up">
+      <div class="dot"></div>
+      <div class="meta">
+        <div class="label">Up</div>
+        <div class="value">{{ up() }}</div>
+      </div>
+    </div>
+
+    <div class="tile warn">
+      <div class="dot"></div>
+      <div class="meta">
+        <div class="label">Degraded</div>
+        <div class="value">{{ degraded() }}</div>
+      </div>
+    </div>
+
+    <div class="tile down">
+      <div class="dot"></div>
+      <div class="meta">
+        <div class="label">Down</div>
+        <div class="value">{{ down() }}</div>
+      </div>
+    </div>
+
+    <div class="tile kpi">
+      <div class="label">Success Rate</div>
+      <div class="value big">{{ successRate() }}%</div>
+    </div>
+
+    <div class="tile kpi">
+      <div class="label">Avg Latency</div>
+      <div class="value">{{ avgLatency() }} ms</div>
+    </div>
+
+    <div class="tile kpi">
+      <div class="label">p95 Latency</div>
+      <div class="value">{{ p95Latency() }} ms</div>
+    </div>
+  </section>
+
+  <section class="spark-wrap" *ngIf="latencies().length">
+    <div class="spark-title">
+      Latency (this sweep)
+      <span class="muted">/ {{ latencies().length }} samples</span>
+    </div>
+    <svg [attr.viewBox]="'0 0 240 48'" class="spark">
+      <path [attr.d]="sparkPath()" class="spark-line"></path>
+    </svg>
+  </section>
+
+  <div class="error" *ngIf="error()">{{ error() }}</div>
 </mat-card>

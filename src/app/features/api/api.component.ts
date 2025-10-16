@@ -10,6 +10,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { DashboardHealthService, EndpointRow, HealthStatus } from '../dashboard/dashboard-health.service';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { ApiDetailsDialogComponent, ApiDetailsData } from './api-details.dialog';
 
 type ApiRow = EndpointRow & { baseUrl: string; path: string; environment: string };
 
@@ -29,6 +31,25 @@ type ApiRow = EndpointRow & { baseUrl: string; path: string; environment: string
 })
 export class ApiComponent implements OnInit {
   private health = inject(DashboardHealthService);
+// inside @Component imports: add MatDialogModule
+// inside class:
+// inside @Component imports: add MatDialogModule
+// inside class:
+private dialog = inject(MatDialog);
+
+openDetails(r: ApiRow) {
+  const data: ApiDetailsData = {
+    name: r.name,
+    method: r.method,
+    url: r.url,
+    baseUrl: r.baseUrl,
+    path: r.path,
+    environment: r.environment,
+    status: r.status,
+    latencyMs: r.latencyMs
+  };
+  this.dialog.open(ApiDetailsDialogComponent, { data, panelClass: 'api-details-panel' });
+}
 
   // page/config
   loadingCfg = signal(true);
