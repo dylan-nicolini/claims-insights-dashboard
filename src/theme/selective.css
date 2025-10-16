@@ -1,0 +1,120 @@
+/* ===== Selective Brand Tokens (CSS Variables) ===== */
+:root {
+  /* Core palette */
+  --sel-ink: #1f1f1f;             /* primary text (close to site headlines) */
+  --sel-ink-2: #2f2c2c;           /* toolbar text */
+  --sel-muted: #6b7280;           /* secondary text */
+  --sel-bg: #f7f7f7;              /* app background */
+  --sel-surface: #ffffff;         /* cards/surfaces */
+  --sel-divider: #e5e7eb;         /* borders & dividers */
+
+  /* Accent + states */
+  --sel-accent: #ffcf31;          /* Selective yellow (sparingly) */
+  --sel-link: #0a66c2;            /* link */
+  --sel-ok-bg: #ecfdf5;
+  --sel-ok-fg: #065f46;
+  --sel-ok-bd: #a7f3d0;
+  --sel-warn-bg: #fffbeb;
+  --sel-warn-fg: #92400e;
+  --sel-warn-bd: #fde68a;
+  --sel-down-bg: #fef2f2;
+  --sel-down-fg: #991b1b;
+  --sel-down-bd: #fecaca;
+
+  /* Shape & elevation */
+  --sel-radius-md: 12px;
+  --sel-radius-lg: 14px;
+  --sel-shadow-card: 0 6px 20px rgba(0,0,0,.04);
+
+  /* Typography */
+  --sel-font: 'Inter', 'Roboto', Arial, sans-serif;
+  --sel-h1: 28px;
+  --sel-h1-w: 800;
+  --sel-small: 12px;
+}
+
+/* ===== Global base ===== */
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--sel-bg);
+  color: var(--sel-ink);
+  font-family: var(--sel-font);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== Links ===== */
+a { color: var(--sel-link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ===== Card look (used by API & anywhere with mat-card) ===== */
+.mat-mdc-card {
+  background: var(--sel-surface);
+  border: 1px solid var(--sel-divider);
+  border-radius: var(--sel-radius-lg);
+  box-shadow: var(--sel-shadow-card);
+}
+
+/* ===== Toolbar / Chrome (top bar) ===== */
+.mat-toolbar, .app-chrome {
+  background: #fff !important;
+  color: var(--sel-ink-2) !important;
+  border-bottom: 1px solid var(--sel-divider);
+  box-shadow: 0 1px 2px rgba(0,0,0,.03);
+}
+
+/* ===== Sidenav ===== */
+.mat-drawer {
+  background: #fff;
+  border-right: 1px solid var(--sel-divider);
+}
+
+/* ===== Buttons (Material) ===== */
+.mdc-button--outlined {
+  --mdc-outlined-button-outline-color: var(--sel-divider);
+  --mdc-outlined-button-label-text-color: var(--sel-ink-2);
+  --mdc-outlined-button-outline-width: 1px;
+  border-radius: 999px !important;
+}
+.mdc-button--filled, .mdc-button--raised {
+  --mdc-filled-button-container-color: var(--sel-ink-2);
+  --mdc-filled-button-label-text-color: #fff;
+  border-radius: 999px !important;
+}
+
+/* ===== Form fields / Inputs ===== */
+.mdc-text-field--outlined {
+  --mdc-outlined-text-field-outline-color: var(--sel-divider);
+  --mdc-outlined-text-field-hover-outline-color: var(--sel-ink-2);
+  --mdc-outlined-text-field-focus-outline-color: var(--sel-ink-2);
+  --mdc-outlined-text-field-label-text-color: var(--sel-muted);
+  border-radius: 10px !important;
+}
+
+/* ===== Progress bar ===== */
+.mdc-linear-progress {
+  --mdc-linear-progress-active-indicator-color: var(--sel-ink-2);
+  --mdc-linear-progress-track-color: #e9eaeb;
+  border-radius: 4px;
+}
+
+/* ===== Chips (we still style app-level status pills separately) ===== */
+.mat-mdc-chip {
+  border-radius: 999px !important;
+}
+
+/* ===== Table general ===== */
+.mat-mdc-table thead th {
+  color: var(--sel-muted);
+  font-weight: 700;
+  font-size: 12px;
+  background: var(--sel-surface);
+  border-bottom: 1px solid var(--sel-divider);
+}
+.mat-mdc-table tbody td {
+  border-bottom: 1px solid var(--sel-divider);
+}
+.mat-mdc-row:hover td {
+  background: #f6f7f8 !important;
+}

@@ -1,15 +1,8 @@
-:root {
-  --selective-divider: #e5e7eb;
-  --selective-gray-500: #6b7280;
-  --selective-gray-25: #f7f7f7;
-}
+/* Import the plain-CSS brand tokens for the whole app */
+@import 'theme/selective.css';
 
-html, body { height: 100%; }
-body {
-  margin: 0;
-  background: var(--selective-gray-25);
-  color: #111827;
-  font-family: 'Inter', 'Roboto', Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* Optional app-wide helpers */
+:root {
+  /* expose to component SCSS via var(...) */
+  --selective-gray-25: var(--sel-bg);
 }
