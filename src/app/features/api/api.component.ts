@@ -1,150 +1,145 @@
-import { Component, OnInit, computed, signal } from '@angular/core';
+import { Component, OnInit, computed, signal, effect, inject, ViewEncapsulation } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
 import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatSelectModule } from '@angular/material/select';
+import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatProgressBarModule } from '@angular/material/progress-bar';
+import { MatChipsModule } from '@angular/material/chips';
 import { DashboardHealthService, EndpointRow, HealthStatus } from '../dashboard/dashboard-health.service';
 
-type ApiRow = EndpointRow & {
-  baseUrl: string;
-  path: string;
-  environment: string;
-};
+type ApiRow = EndpointRow & { baseUrl: string; path: string; environment: string };
 
 @Component({
   selector: 'app-api',
   standalone: true,
+  encapsulation: ViewEncapsulation.None, // ensure our SCSS overrides MDC when needed
   imports: [
     CommonModule,
     MatCardModule, MatTableModule,
-    MatFormFieldModule, MatSelectModule,
-    MatIconModule, MatButtonModule, MatTooltipModule
+    MatFormFieldModule, MatInputModule,
+    MatIconModule, MatButtonModule, MatTooltipModule,
+    MatProgressBarModule, MatChipsModule
   ],
   templateUrl: './api.component.html',
   styleUrls: ['./api.component.scss'],
 })
 export class ApiComponent implements OnInit {
+  private health = inject(DashboardHealthService);
 
-  loading = signal(true);
-  error   = signal<string | null>(null);
+  // page/config
+  loadingCfg = signal(true);
+  error = signal<string | null>(null);
 
-  // All rows loaded from assets + enriched with baseUrl/path/environment
+  // data
   rows = signal<ApiRow[]>([]);
-
-  // UI state
-  environment = signal<string>('Production');
   lastCheckedAt = signal<Date | null>(null);
 
-  // Derive environment list from assets; fallback to “Production”
-  environments = computed(() => {
-    const set = new Set<string>();
-    for (const r of this.rows()) set.add(r.environment || 'Production');
-    const list = Array.from(set);
-    return list.length ? list : ['Production'];
-  });
+  // search
+  query = signal<string>('');
 
-  // Table data for the selected environment
+  // progress
+  totalToCheck = signal(0);
+  checkedSoFar = signal(0);
+  inProgress = computed(() => this.totalToCheck() > 0 && this.checkedSoFar() < this.totalToCheck());
+  progressPct = computed(() => this.totalToCheck() ? Math.round(this.checkedSoFar() / this.totalToCheck() * 100) : 0);
+
+  // derived
   filteredRows = computed(() => {
-    const env = this.environment();
-    return this.rows().filter(r => r.environment === env);
+    const q = this.query().trim().toLowerCase();
+    if (!q) return this.rows();
+    return this.rows().filter(r =>
+      r.name.toLowerCase().includes(q) ||
+      r.baseUrl.toLowerCase().includes(q) ||
+      r.path.toLowerCase().includes(q) ||
+      r.method.toLowerCase().includes(q)
+    );
   });
 
-  // Legend counts
-  upCount        = computed(() => this.filteredRows().filter(r => r.status === 'UP').length);
-  degradedCount  = computed(() => this.filteredRows().filter(r => r.status === 'DEGRADED').length);
-  downCount      = computed(() => this.filteredRows().filter(r => r.status === 'DOWN').length);
-  totalCount     = computed(() => this.filteredRows().length);
-
-  constructor(private health: DashboardHealthService) {}
+  // summary tiles
+  upCount       = computed(() => this.filteredRows().filter(r => r.status === 'UP').length);
+  degradedCount = computed(() => this.filteredRows().filter(r => r.status === 'DEGRADED').length);
+  downCount     = computed(() => this.filteredRows().filter(r => r.status === 'DOWN').length);
+  totalCount    = computed(() => this.filteredRows().length);
 
   async ngOnInit() {
     try {
-      this.loading.set(true);
-      // Load endpoints (assets/apis.json)
+      this.loadingCfg.set(true);
+
+      // 1) Load config and build rows (FAST). Render immediately.
       const cfg = await this.health.loadAssets();
-
-      // Build EndpointRow[] first
-      const baseRows = this.health.buildRows(cfg);
-
-      // Enrich with baseUrl, path, environment (if missing -> "Production")
-      const enriched: ApiRow[] = baseRows.map(r => {
-        const u = safeParseUrl(r.url);
-        return {
-          ...r,
-          baseUrl: u.base,
-          path: u.path,
-          environment: (u.env || (asAny(r)['environment'] as string) || 'Production')
-        };
+      const base = this.health.buildRows(cfg);
+      const enriched: ApiRow[] = base.map(r => {
+        const u = parseUrl(r.url);
+        return { ...r, baseUrl: u.base, path: u.path, environment: u.env ?? 'Production' };
       });
 
-      // Default environment = first present
-      const envs = Array.from(new Set(enriched.map(x => x.environment)));
-      if (envs.length) this.environment.set(envs[0]);
-
       this.rows.set(enriched);
+      this.loadingCfg.set(false);     // <-- let Angular paint the table NOW
 
-      // Initial sweep
-      await this.sweep();
+      // 2) Start health checks in the background (do NOT await)
+      this.runHealthSweep(enriched);  // <-- fire-and-forget
+
     } catch (e: any) {
       this.error.set(e?.message ?? 'Failed to load API configuration.');
-    } finally {
-      this.loading.set(false);
+      this.loadingCfg.set(false);
     }
   }
 
-  async sweep() {
-    const current = this.rows();
-    for (const r of current) {
-      const updated = await this.health.check(r);
-      // keep baseUrl/path/environment from existing entry
-      this.rows.update(list => list.map(x =>
-        x.url === updated.url
-          ? { ...x, status: updated.status, latencyMs: updated.latencyMs }
-          : x
-      ));
-    }
+  async runHealthSweep(all: ApiRow[], concurrency = 6) {
+    this.totalToCheck.set(all.length);
+    this.checkedSoFar.set(0);
+
+    await parallelMap(all, concurrency, async (row) => {
+      const updated = await this.health.check(row);
+      this.rows.update(list =>
+        list.map(x => x.url === updated.url ? { ...x, status: updated.status, latencyMs: updated.latencyMs } : x)
+      );
+      this.checkedSoFar.update(n => n + 1);
+    });
+
     this.lastCheckedAt.set(new Date());
   }
 
-  statusClass(s: HealthStatus) {
-    return {
-      'status': true,
-      'ok': s === 'UP',
-      'warn': s === 'DEGRADED',
-      'down': s === 'DOWN'
-    };
-  }
-
-  open(r: ApiRow) {
-    window.open(r.url, '_blank', 'noopener');
-  }
+  // UI handlers
+  onQuery(v: string) { this.query.set(v); }
+  refreshAll() { void this.runHealthSweep(this.rows()); }
+  retryRow(r: ApiRow) { void this.runHealthSweep([r], 1); }
+  open(r: ApiRow) { window.open(r.url, '_blank', 'noopener'); }
 }
 
-// Helpers
-function safeParseUrl(full: string): { base: string; path: string; env?: string } {
+/* helpers */
+function parseUrl(full: string): { base: string; path: string; env?: string } {
   try {
     const u = new URL(full);
     const base = `${u.protocol}//${u.host}`;
     const path = u.pathname + (u.search || '');
-    // Optional: env by subdomain convention (e.g., api-dev.example.com)
     const host = u.host.toLowerCase();
-    const env = host.includes('dev')     ? 'Development'
-             : host.includes('test')    ? 'Test'
-             : host.includes('staging') ? 'Staging'
-             : 'Production';
+    let env: string | undefined;
+    if (host.includes('dev')) env = 'Development';
+    else if (host.includes('test')) env = 'Test';
+    else if (host.includes('staging') || host.includes('stg')) env = 'Staging';
     return { base, path, env };
   } catch {
-    // Fallback when URL constructor can’t parse
-    const sep = full.indexOf('/', 8); // after protocol
-    const base = sep > 0 ? full.slice(0, sep) : full;
-    const path = sep > 0 ? full.slice(sep) : '/';
-    return { base, path };
+    const i = full.indexOf('/', 8);
+    return { base: i > 0 ? full.slice(0, i) : full, path: i > 0 ? full.slice(i) : '/' };
   }
 }
 
-// Type escape hatch for optional props from assets
-function asAny<T>(v: T): any { return v as any; }
+async function parallelMap<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
+  const q = [...items];
+  const runners: Promise<void>[] = [];
+  for (let i = 0; i < Math.min(concurrency, q.length); i++) {
+    runners.push((async function run() {
+      while (q.length) {
+        const next = q.shift()!;
+        try { await worker(next); } catch {}
+      }
+    })());
+  }
+  await Promise.all(runners);
+}
+
