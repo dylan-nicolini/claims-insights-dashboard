@@ -145,16 +145,18 @@ The app builds final URLs as **base + path** using the selected environment’s 
 Avoid duplicating similar rows by mapping a single endpoint to **multiple environments**:
 
 ```json
-{
-  "name": "Policy • Process",
-  "method": "GET",
-  "environments": {
-    "Development": { "path": "/process/policy/health" },
-    "Test":        { "path": "/process/policy/health" },
-    "Staging":     { "path": "/process/policy/health" },
-    "Production":  { "path": "/process/policy/health" }
-  }
-}
+    {
+      "name": "Policy • Process",
+      "method": "GET",
+      "environments": ["Development", "Test", "Staging", "Production"],
+      "path": "/process/policy/health"
+    },
+    {
+      "name": "Claims • Intakes",
+      "method": "GET",
+      "environments": ["Development", "Test", "Staging", "Production"],
+      "path": "/claims/intakes/health"
+    }
 ```
 
 The app expands this into four internal rows (one per environment).  
