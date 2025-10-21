@@ -4,37 +4,40 @@
     "Test":        { "base": "/qa-api/claims/api" },
     "Staging":     { "base": "/stg-api/claims/api" },
     "Production":  { "base": "/prod-api/claims/api" },
-
-    "Sandbox": { "base": "/httpbin" }
+    "Sandbox":     { "base": "/httpbin" }
   },
   "endpoints": [
-    { "name": "Policy • Process (QA)", "method": "GET", "environment": "Test", "path": "/process/policy/health" },
-    { "name": "Claims • Intakes (QA)", "method": "GET", "environment": "Test", "path": "/claims/intakes/health" },
-    
-    { "name": "HTTPBin • 200 OK",        "method": "GET", "environment": "Sandbox", "path": "/status/200" },
-    { "name": "HTTPBin • 500 Error",     "method": "GET", "environment": "Sandbox", "path": "/status/500" },
-    { "name": "HTTPBin • Delay 2s",      "method": "GET", "environment": "Sandbox", "path": "/delay/2"   },
-    { "name": "HTTPBin • Echo (GET)",    "method": "GET", "environment": "Sandbox", "path": "/get?svc=echo&env=sandbox" },
-    { "name": "HTTPBin • 204 No Content",        "method": "GET", "environment": "Sandbox", "path": "/status/204" },
-    { "name": "HTTPBin • 404 Not Found",         "method": "GET", "environment": "Sandbox", "path": "/status/404" },
-    { "name": "HTTPBin • 418 I'm a Teapot",      "method": "GET", "environment": "Sandbox", "path": "/status/418" },
-    { "name": "HTTPBin • 500 Server Error",      "method": "GET", "environment": "Sandbox", "path": "/status/500" },
+    {
+      "name": "Policy • Process",
+      "method": "GET",
+      "environments": ["Development", "Test", "Staging", "Production"],
+      "path": "/process/policy/health"
+    },
+    {
+      "name": "Claims • Intakes",
+      "method": "GET",
+      "environments": ["Development", "Test", "Staging", "Production"],
+      "path": "/claims/intakes/health"
+    },
 
-    { "name": "HTTPBin • Delay 1s",              "method": "GET", "environment": "Sandbox", "path": "/delay/1" },
-    { "name": "HTTPBin • Delay 3s",              "method": "GET", "environment": "Sandbox", "path": "/delay/3" },
-
-    { "name": "HTTPBin • JSON Echo (anything)",  "method": "GET", "environment": "Sandbox", "path": "/anything?svc=echo&env=sandbox" },
-    { "name": "HTTPBin • UUID",                  "method": "GET", "environment": "Sandbox", "path": "/uuid" },
-    { "name": "HTTPBin • IP",                    "method": "GET", "environment": "Sandbox", "path": "/ip" },
-
-    { "name": "HTTPBin • GZip (200)",            "method": "GET", "environment": "Sandbox", "path": "/gzip" },
-    { "name": "HTTPBin • Response Headers",      "method": "GET", "environment": "Sandbox", "path": "/response-headers?X-App=ClaimsInsights&Cache-Control=no-cache&Server=Selective-Demo" },
-
-    { "name": "HTTPBin • 302 Found (no Location)","method":"GET", "environment": "Sandbox", "path": "/status/302" },
-    { "name": "HTTPBin • Redirect to 200",       "method": "GET", "environment": "Sandbox", "path": "/redirect-to?url=%2Fstatus%2F200" },
-
-    { "name": "HTTPBin • Bytes(32)",             "method": "GET", "environment": "Sandbox", "path": "/bytes/32" },
-    { "name": "HTTPBin • Stream 1",              "method": "GET", "environment": "Sandbox", "path": "/stream/1" }
-
+    { "name": "HTTPBin • 200 OK",                   "method": "GET", "environment": "Sandbox", "path": "/status/200" },
+    { "name": "HTTPBin • 500 Error",                "method": "GET", "environment": "Sandbox", "path": "/status/500" },
+    { "name": "HTTPBin • Delay 2s",                 "method": "GET", "environment": "Sandbox", "path": "/delay/2" },
+    { "name": "HTTPBin • Echo (GET)",               "method": "GET", "environment": "Sandbox", "path": "/get?svc=echo&env=sandbox" },
+    { "name": "HTTPBin • 204 No Content",           "method": "GET", "environment": "Sandbox", "path": "/status/204" },
+    { "name": "HTTPBin • 404 Not Found",            "method": "GET", "environment": "Sandbox", "path": "/status/404" },
+    { "name": "HTTPBin • 418 I'm a Teapot",         "method": "GET", "environment": "Sandbox", "path": "/status/418" },
+    { "name": "HTTPBin • 500 Server Error",         "method": "GET", "environment": "Sandbox", "path": "/status/500" },
+    { "name": "HTTPBin • Delay 1s",                 "method": "GET", "environment": "Sandbox", "path": "/delay/1" },
+    { "name": "HTTPBin • Delay 3s",                 "method": "GET", "environment": "Sandbox", "path": "/delay/3" },
+    { "name": "HTTPBin • JSON Echo (anything)",     "method": "GET", "environment": "Sandbox", "path": "/anything?svc=echo&env=sandbox" },
+    { "name": "HTTPBin • UUID",                     "method": "GET", "environment": "Sandbox", "path": "/uuid" },
+    { "name": "HTTPBin • IP",                       "method": "GET", "environment": "Sandbox", "path": "/ip" },
+    { "name": "HTTPBin • GZip (200)",               "method": "GET", "environment": "Sandbox", "path": "/gzip" },
+    { "name": "HTTPBin • Response Headers",         "method": "GET", "environment": "Sandbox", "path": "/response-headers?X-App=ClaimsInsights&Cache-Control=no-cache&Server=Selective-Demo" },
+    { "name": "HTTPBin • 302 Found (no Location)",  "method": "GET", "environment": "Sandbox", "path": "/status/302" },
+    { "name": "HTTPBin • Redirect to 200",          "method": "GET", "environment": "Sandbox", "path": "/redirect-to?url=%2Fstatus%2F200" },
+    { "name": "HTTPBin • Bytes(32)",                "method": "GET", "environment": "Sandbox", "path": "/bytes/32" },
+    { "name": "HTTPBin • Stream 1",                 "method": "GET", "environment": "Sandbox", "path": "/stream/1" }
   ]
 }

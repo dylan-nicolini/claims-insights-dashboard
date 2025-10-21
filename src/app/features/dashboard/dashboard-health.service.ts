@@ -6,45 +6,57 @@ import { HttpClient } from '@angular/common/http';
 export type HealthStatus = 'UP' | 'DEGRADED' | 'DOWN' | 'UNKNOWN';
 
 export interface EnvConfig {
-  /** e.g., "https://services-claims-qa.selective.com/claims/apis" (no trailing slash required) */
+  /** e.g., "/qa-api/claims/api" OR "https://services-claims-qa.selective.com/claims/api" */
   base: string;
-  // You can extend later with headers, timeouts, etc.
 }
 
 export interface AssetsConfig {
-  /** Optional map of environment name → base URL */
   environments?: Record<string, EnvConfig>;
-  /** Endpoint list; supports both legacy (absolute url) and new (env+path) styles */
   endpoints: EndpointConfig[];
 }
 
+/** NEW: supports multiple shapes */
 export interface EndpointConfig {
+  /** Display name (can be overridden per-env in targets[]) */
   name: string;
+  /** Default method (can be overridden per-env in targets[]) */
   method: 'GET'|'POST'|'PUT'|'DELETE'|'PATCH'|'HEAD';
-  /** Legacy/override: if absolute, this takes precedence and is used as-is */
-  url?: string;
-  /** New compact style: environment + path are combined with environments[env].base */
-  environment?: string;
-  path?: string;
+
+  /** Legacy/single-env */
+  environment?: string;   // single env
+  path?: string;          // joined with env base
+  url?: string;           // absolute or relative to env base (legacy override)
+
+  /** Multi-env (shared path across envs) */
+  environments?: string[];  // multiple env names
+
+  /** Per-env overrides (most flexible) */
+  targets?: Array<{
+    environment: string;
+    path?: string;        // overrides parent path
+    url?: string;         // absolute or relative to env base
+    name?: string;        // override display name for this env
+    method?: EndpointConfig['method']; // override method
+  }>;
 }
 
 export interface EndpointRow {
   name: string;
   method: string;
-  url: string;            // resolved absolute URL used for checks
+  url: string;            // resolved absolute (or proxied) URL
+  environment: string;    // env label for UI
   status: HealthStatus;
   latencyMs?: number;
 }
 
-/** Rich result for dialog/history */
 export interface DetailedCheck {
   url: string;
   method: string;
   status: HealthStatus;
   latencyMs: number;
-  httpCode: number;                 // -1 if unknown
-  headers: Record<string, string>;  // small readable subset
-  at: string;                       // ISO timestamp
+  httpCode: number;
+  headers: Record<string, string>;
+  at: string;
 }
 
 /* ── Service ───────────────────────────────────────────────────── */
@@ -52,8 +64,6 @@ export interface DetailedCheck {
 @Injectable({ providedIn: 'root' })
 export class DashboardHealthService {
   private worker: Worker | null = null;
-
-  /** Keep last 5 checks per URL (in-memory) */
   private history = new Map<string, DetailedCheck[]>();
 
   constructor(private http: HttpClient) {
@@ -67,43 +77,84 @@ export class DashboardHealthService {
     }
   }
 
-  /** Load endpoints JSON from assets */
   async loadAssets(): Promise<AssetsConfig> {
     return this.http.get<AssetsConfig>('assets/apis.json').toPromise() as Promise<AssetsConfig>;
   }
 
   /**
-   * Build resolved rows from config:
-   * - Accepts both new (env + path) and legacy (full url) shapes
-   * - Row-level absolute `url` overrides env base
+   * Build table rows from config.
+   * Supports:
+   *  - legacy single env: environment+path OR absolute url
+   *  - multi env: environments[] + path
+   *  - per-env overrides: targets[]
    */
   buildRows(cfg: AssetsConfig): EndpointRow[] {
     const envs = cfg.environments ?? {};
     const rows: EndpointRow[] = [];
+    const seen = new Set<string>(); // dedupe by method|url
 
     for (const e of cfg.endpoints ?? []) {
-      const resolved = this.resolveEndpointUrl(e, envs);
-      if (!resolved) {
-        console.warn('[health] invalid endpoint config skipped:', e);
+      // 1) Per-env targets (highest flexibility)
+      if (Array.isArray(e.targets) && e.targets.length) {
+        for (const t of e.targets) {
+          const name = t.name ?? e.name;
+          const method = t.method ?? e.method;
+          const resolved = resolveUrl({ url: t.url, path: t.path ?? e.path, environment: t.environment }, envs, name);
+          if (!resolved) continue;
+          const key = `${method}|${resolved}`;
+          if (seen.has(key)) continue; seen.add(key);
+          rows.push({
+            name,
+            method,
+            url: resolved,
+            environment: t.environment,
+            status: 'UNKNOWN'
+          });
+        }
         continue;
       }
+
+      // 2) Multi-env shared path
+      if (Array.isArray(e.environments) && e.environments.length) {
+        for (const envName of e.environments) {
+          const resolved = resolveUrl({ url: e.url, path: e.path, environment: envName }, envs, e.name);
+          if (!resolved) continue;
+          const key = `${e.method}|${resolved}`;
+          if (seen.has(key)) continue; seen.add(key);
+          rows.push({
+            name: e.name,
+            method: e.method,
+            url: resolved,
+            environment: envName,
+            status: 'UNKNOWN'
+          });
+        }
+        continue;
+      }
+
+      // 3) Legacy/single env or absolute URL
+      const envName = e.environment ?? '';
+      const resolved = resolveUrl({ url: e.url, path: e.path, environment: envName }, envs, e.name);
+      if (!resolved) continue;
+      const key = `${e.method}|${resolved}`;
+      if (seen.has(key)) continue; seen.add(key);
       rows.push({
         name: e.name,
         method: e.method,
         url: resolved,
+        environment: envName || inferEnvironment(resolved, envs),
         status: 'UNKNOWN'
       });
     }
+
     return rows;
   }
 
-  /** Fast status check used by dashboard/API grid */
   check(row: EndpointRow): Promise<EndpointRow> {
     if (!this.worker) return this.checkInMainThread(row);
     return this.checkWithWorker(row, this.worker);
   }
 
-  /** Detailed check (for dialog): captures HTTP code + a few headers */
   async detailedCheck(method: string, url: string, timeoutMs = 15000): Promise<DetailedCheck> {
     const start = performance.now();
     let httpCode = -1;
@@ -119,12 +170,9 @@ export class DashboardHealthService {
       httpCode = res.status;
 
       const wanted = ['content-type', 'date', 'server', 'cache-control'];
-      res.headers.forEach((v, k) => {
-        if (wanted.includes(k.toLowerCase())) headers[k] = v;
-      });
+      res.headers.forEach((v, k) => { if (wanted.includes(k.toLowerCase())) headers[k] = v; });
 
       const ms = Math.round(performance.now() - start);
-
       if (!res.ok) status = 'DOWN';
       else status = ms > 1200 ? 'DEGRADED' : 'UP';
 
@@ -139,35 +187,8 @@ export class DashboardHealthService {
     }
   }
 
-  /** Return last 5 checks (most recent first) */
   getHistory(url: string): DetailedCheck[] {
     return this.history.get(url) ?? [];
-  }
-
-  /* ── Internals ───────────────────────────────────────────────── */
-
-  private resolveEndpointUrl(e: EndpointConfig, envs: Record<string, EnvConfig>): string | null {
-    // 1) Absolute URL override (or legacy style)
-    if (e.url && isAbsoluteUrl(e.url)) {
-      return e.url;
-    }
-
-    // 2) New compact: environment + path
-    if (e.environment && e.path) {
-      const env = envs[e.environment];
-      if (!env?.base) return null;
-      return joinUrl(env.base, e.path);
-    }
-
-    // 3) If url exists but is relative (rare), attempt env join if possible
-    if (e.url && !isAbsoluteUrl(e.url) && e.environment) {
-      const env = envs[e.environment];
-      if (!env?.base) return null;
-      return joinUrl(env.base, e.url);
-    }
-
-    // Not enough info to resolve
-    return null;
   }
 
   private pushHistory(url: string, entry: DetailedCheck) {
@@ -199,11 +220,9 @@ export class DashboardHealthService {
       const res = await fetch(row.url, { method: row.method, signal: ctrl.signal, cache: 'no-store' });
       clearTimeout(timeout);
       const ms = Math.round(performance.now() - start);
-
       let status: HealthStatus = 'UP';
       if (!res.ok) status = 'DOWN';
       else if (ms > 1200) status = 'DEGRADED';
-
       return { ...row, status, latencyMs: ms };
     } catch {
       const ms = Math.round(performance.now() - start);
@@ -214,12 +233,95 @@ export class DashboardHealthService {
 
 /* ── URL helpers ───────────────────────────────────────────────── */
 
-function isAbsoluteUrl(u: string): boolean {
-  return /^https?:\/\//i.test(u);
+function isAbsoluteUrl(u?: string): u is string {
+  return !!u && /^https?:\/\//i.test(u);
 }
 
-function joinUrl(base: string, path: string): string {
-  const b = base.replace(/\/+$/, '');                 // trim trailing slashes
-  const p = path.startsWith('/') ? path : '/' + path; // ensure leading slash
+function normalizeBase(b: string): string {
+  return b.replace(/\/+$/, '');
+}
+
+function joinUrl(base: string, path?: string): string {
+  const b = normalizeBase(base);
+  const p = !path ? '' : (path.startsWith('/') ? path : '/' + path);
   return b + p;
+}
+
+function stripBasePrefix(base: string, p?: string): string | undefined {
+  if (typeof p !== 'string' || p.length === 0) return p;
+
+  // Work on a guaranteed string
+  const s = p;
+
+  // Absolute URLs passed via `path` should be treated as full URLs
+  if (/^https?:\/\//i.test(s)) return s;
+
+  // Normalize base
+  const normBase = normalizeBase(base);
+
+  // Try URL parsing first (works for absolute bases)
+  try {
+    const b = new URL(normBase);
+    // Ensure base pathname ends with a single slash for comparison
+    const basePath = b.pathname.endsWith('/') ? b.pathname : b.pathname + '/';
+    const rel = s.startsWith('/') ? s : '/' + s;
+    return rel.startsWith(basePath) ? rel.slice(basePath.length - 1) : rel;
+  } catch {
+    // Fallback when base is a relative proxy path like "/qa-api/claims/api"
+    const basePath = normBase; // already trimmed of trailing slash
+    const rel = s.startsWith('/') ? s : '/' + s;
+    return rel.startsWith(basePath) ? rel.slice(basePath.length) || '/' : rel;
+  }
+}
+
+
+function resolveUrl(
+  src: { url?: string; path?: string; environment?: string },
+  envs: Record<string, EnvConfig>,
+  nameForWarn: string
+): string | null {
+  // absolute URL wins (legacy override)
+  if (isAbsoluteUrl(src.url)) return src.url;
+
+  // absolute path mistakenly placed in `path` → treat as url
+  if (isAbsoluteUrl(src.path)) return src.path!;
+
+  // env + (url relative) or path
+  if (src.environment) {
+    const env = envs[src.environment];
+    if (!env?.base) {
+      console.warn(`[health] row "${nameForWarn}": environment "${src.environment}" has no base.`);
+      return null;
+    }
+    const rel = src.url ? stripBasePrefix(env.base, src.url) : stripBasePrefix(env.base, src.path);
+    return joinUrl(env.base, rel);
+  }
+
+  // only relative url or path with no environment → cannot resolve
+  if (src.url || src.path) {
+    console.warn(`[health] row "${nameForWarn}": missing environment to resolve relative URL/path.`);
+  }
+  return null;
+}
+
+function inferEnvironment(url: string, envs: Record<string, EnvConfig>): string {
+  try {
+    // Try exact base match first
+    const href = url;
+    for (const [name, env] of Object.entries(envs)) {
+      const base = normalizeBase(env.base);
+      if (href.startsWith(base)) return name;
+    }
+    // Heuristics from hostname for absolute URLs
+    if (isAbsoluteUrl(url)) {
+      const host = new URL(url).hostname.toLowerCase();
+      if (host.includes('dev')) return 'Development';
+      if (host.includes('qa') || host.includes('test')) return 'Test';
+      if (host.includes('stg') || host.includes('stage') || host.includes('staging')) return 'Staging';
+      if (host.includes('prod')) return 'Production';
+    }
+    return 'Unknown';
+  } catch {
+    return 'Unknown';
+  }
 }
