@@ -1,0 +1,46 @@
+{
+  "environments": {
+    "Development": { "base": "/dev-api/claims/api" },
+    "Test":        { "base": "/qa-api/claims/api" },
+    "Staging":     { "base": "/stg-api/claims/api" },
+    "Production":  { "base": "/prod-api/claims/api" }
+  },
+  "endpoints": [
+
+    { "name": "Policy • Process (QA)",   "method": "GET", "environment": "Test", "path": "/process/policy/health" },
+    { "name": "Claims • Intakes (QA)",   "method": "GET", "environment": "Test", "path": "/claims/intakes/health" },
+
+
+    { "name": "Identity • Token (QA override)", "method": "GET", "environment": "Test", "url": "/httpbin/get?svc=identity&ep=token&env=test" },
+
+    { "name": "Identity • Token (Dev)",     "method": "GET", "environment": "Development", "url": "/httpbin/get?svc=identity&ep=token&env=dev" },
+    { "name": "Identity • Token (Test)",    "method": "GET", "environment": "Test",        "url": "/httpbin/get?svc=identity&ep=token&env=test" },
+    { "name": "Identity • Token (Staging)", "method": "GET", "environment": "Staging",     "url": "/httpbin/delay/2?svc=identity&ep=token&env=stg" },
+    { "name": "Identity • Token (Prod)",    "method": "GET", "environment": "Production",  "url": "/httpbin/get?svc=identity&ep=token&env=prod" },
+
+    { "name": "Policy • List (Dev)",        "method": "GET", "environment": "Development", "url": "/httpbin/get?svc=policy&ep=list&env=dev" },
+    { "name": "Policy • List (Test)",       "method": "GET", "environment": "Test",        "url": "/httpbin/status/500?svc=policy&ep=list&env=test" },
+    { "name": "Policy • List (Staging)",    "method": "GET", "environment": "Staging",     "url": "/httpbin/get?svc=policy&ep=list&env=stg" },
+    { "name": "Policy • List (Prod)",       "method": "GET", "environment": "Production",  "url": "/httpbin/get?svc=policy&ep=list&env=prod" },
+
+    { "name": "Claims • Search (Dev)",      "method": "GET", "environment": "Development", "url": "/httpbin/get?svc=claims&ep=search&env=dev" },
+    { "name": "Claims • Search (Test)",     "method": "GET", "environment": "Test",        "url": "/httpbin/delay/2?svc=claims&ep=search&env=test" },
+    { "name": "Claims • Search (Staging)",  "method": "GET", "environment": "Staging",     "url": "/httpbin/get?svc=claims&ep=search&env=stg" },
+    { "name": "Claims • Search (Prod)",     "method": "GET", "environment": "Production",  "url": "/httpbin/get?svc=claims&ep=search&env=prod" },
+
+    { "name": "Billing • Invoices (Dev)",   "method": "GET", "environment": "Development", "url": "/httpbin/get?svc=billing&ep=invoices&env=dev" },
+    { "name": "Billing • Invoices (Test)",  "method": "GET", "environment": "Test",        "url": "/httpbin/get?svc=billing&ep=invoices&env=test" },
+    { "name": "Billing • Invoices (Staging)","method": "GET","environment": "Staging",     "url": "/httpbin/status/500?svc=billing&ep=invoices&env=stg" },
+    { "name": "Billing • Invoices (Prod)",  "method": "GET", "environment": "Production",  "url": "/httpbin/delay/2?svc=billing&ep=invoices&env=prod" },
+
+    { "name": "Documents • List (Dev)",     "method": "GET", "environment": "Development", "url": "/httpbin/get?svc=documents&ep=list&env=dev" },
+    { "name": "Documents • List (Test)",    "method": "GET", "environment": "Test",        "url": "/httpbin/get?svc=documents&ep=list&env=test" },
+    { "name": "Documents • List (Staging)", "method": "GET", "environment": "Staging",     "url": "/httpbin/delay/2?svc=documents&ep=list&env=stg" },
+    { "name": "Documents • List (Prod)",    "method": "GET", "environment": "Production",  "url": "/httpbin/get?svc=documents&ep=list&env=prod" },
+
+    { "name": "Notifications • Events (Dev)","method": "GET", "environment": "Development", "url": "/httpbin/get?svc=notifications&ep=events&env=dev" },
+    { "name": "Notifications • Events (Test)","method": "GET","environment": "Test",        "url": "/httpbin/get?svc=notifications&ep=events&env=test" },
+    { "name": "Notifications • Events (Stg)","method": "GET", "environment": "Staging",     "url": "/httpbin/get?svc=notifications&ep=events&env=stg" },
+    { "name": "Notifications • Events (Prod)","method": "GET","environment": "Production",  "url": "/httpbin/status/500?svc=notifications&ep=events&env=prod" }
+  ]
+}

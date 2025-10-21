@@ -1,0 +1,8 @@
+{
+  "/dev-api":  { "target": "https://services-claims-dev.selective.com",     "secure": true, "changeOrigin": true, "pathRewrite": { "^/dev-api": "" },  "logLevel": "debug" },
+  "/qa-api":   { "target": "https://services-claims-qa.selective.com",      "secure": true, "changeOrigin": true, "pathRewrite": { "^/qa-api": "" },   "logLevel": "debug" },
+  "/stg-api":  { "target": "https://services-claims-staging.selective.com", "secure": true, "changeOrigin": true, "pathRewrite": { "^/stg-api": "" },  "logLevel": "debug" },
+  "/prod-api": { "target": "https://services-claims.selective.com",         "secure": true, "changeOrigin": true, "pathRewrite": { "^/prod-api": "" }, "logLevel": "debug" },
+
+  "/httpbin":  { "target": "https://httpbin.org", "secure": true, "changeOrigin": true, "pathRewrite": { "^/httpbin": "" }, "logLevel": "debug" }
+}
