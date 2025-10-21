@@ -1,178 +1,199 @@
-import { Component, OnInit, computed, signal, effect, inject, ViewEncapsulation } from '@angular/core';
+import { Component, OnInit, computed, signal, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { MatCardModule } from '@angular/material/card';
 import { MatTableModule } from '@angular/material/table';
+import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatChipsModule } from '@angular/material/chips';
-import { DashboardHealthService, EndpointRow, HealthStatus } from '../dashboard/dashboard-health.service';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { ApiDetailsDialogComponent, ApiDetailsData } from './api-details.dialog';
 
-type ApiRow = EndpointRow & { baseUrl: string; path: string; environment: string };
+import { DashboardHealthService, EndpointRow, HealthStatus } from '../dashboard/dashboard-health.service';
+import { ApiDetailsDialogComponent } from './api-details.dialog';
 
-type RowForDialog = {
-  name: string;
-  method: string;
-  url: string;          // absolute URL
-  environment: string;  // make sure your row includes this
-  status: HealthStatus;
-  latencyMs?: number;
-};
+type ViewRow = EndpointRow & { baseUrl: string; path: string };
 
 @Component({
   selector: 'app-api',
   standalone: true,
-  encapsulation: ViewEncapsulation.None, // ensure our SCSS overrides MDC when needed
   imports: [
     CommonModule,
-    MatCardModule, MatTableModule,
-    MatFormFieldModule, MatInputModule,
-    MatIconModule, MatButtonModule, MatTooltipModule,
-    MatProgressBarModule, MatChipsModule
+    MatTableModule,
+    MatCardModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatIconModule,
+    MatButtonModule,
+    MatTooltipModule,
+    MatProgressBarModule,
+    MatDialogModule
   ],
   templateUrl: './api.component.html',
-  styleUrls: ['./api.component.scss'],
+  styleUrls: ['./api.component.scss']
 })
 export class ApiComponent implements OnInit {
-  private health = inject(DashboardHealthService);
-// inside @Component imports: add MatDialogModule
-// inside class:
-// inside @Component imports: add MatDialogModule
-// inside class:
-private dialog = inject(MatDialog);
+  private svc = inject(DashboardHealthService);
+  private dialog = inject(MatDialog);
 
-openDetails(row: RowForDialog) {
-  this.dialog.open(ApiDetailsDialogComponent, {
-    data: {
-      name: row.name,
-      method: row.method,
-      url: row.url,
-      environment: row.environment,
-      status: row.status,
-      latencyMs: row.latencyMs
-      // ⛔️ Do NOT pass baseUrl or path — the dialog derives both from `url`
-    },
-    panelClass: 'api-details-panel',
-    autoFocus: false
-  });
-}
-
-
-  // page/config
-  loadingCfg = signal(true);
+  // data + ui state
+  private _rows = signal<EndpointRow[]>([]);
+  loadingCfg = signal<boolean>(true);
   error = signal<string | null>(null);
 
-  // data
-  rows = signal<ApiRow[]>([]);
+  // search
+  private _query = signal<string>('');
+
+  // progress (bulk refresh)
+  inProgress = signal<boolean>(false);
+  private _done = signal<number>(0);
+  private _total = signal<number>(0);
+
   lastCheckedAt = signal<Date | null>(null);
 
-  // search
-  query = signal<string>('');
+  // expose search value to template (uses query())
+  query() { return this._query(); }
 
-  // progress
-  totalToCheck = signal(0);
-  checkedSoFar = signal(0);
-  inProgress = computed(() => this.totalToCheck() > 0 && this.checkedSoFar() < this.totalToCheck());
-  progressPct = computed(() => this.totalToCheck() ? Math.round(this.checkedSoFar() / this.totalToCheck() * 100) : 0);
+  // build view rows (adds baseUrl/path & applies search filter)
+  filteredRows = computed<ViewRow[]>(() => {
+    const q = this._query().toLowerCase().trim();
+    const rows = this._rows();
 
-  // derived
-  filteredRows = computed(() => {
-    const q = this.query().trim().toLowerCase();
-    if (!q) return this.rows();
-    return this.rows().filter(r =>
-      r.name.toLowerCase().includes(q) ||
-      r.baseUrl.toLowerCase().includes(q) ||
-      r.path.toLowerCase().includes(q) ||
-      r.method.toLowerCase().includes(q)
+    const mapped: ViewRow[] = rows.map(r => {
+      const { baseUrl, path } = splitUrl(r.url);
+      return { ...r, baseUrl, path };
+    });
+
+    if (!q) return mapped;
+
+    return mapped.filter(r =>
+      (r.name?.toLowerCase().includes(q)) ||
+      (r.environment?.toLowerCase().includes(q)) ||
+      (r.url?.toLowerCase().includes(q)) ||
+      (r.method?.toLowerCase().includes(q))
     );
   });
 
   // summary tiles
-  upCount       = computed(() => this.filteredRows().filter(r => r.status === 'UP').length);
-  degradedCount = computed(() => this.filteredRows().filter(r => r.status === 'DEGRADED').length);
-  downCount     = computed(() => this.filteredRows().filter(r => r.status === 'DOWN').length);
-  totalCount    = computed(() => this.filteredRows().length);
+  upCount = computed(() => this._rows().filter(r => r.status === 'UP').length);
+  degradedCount = computed(() => this._rows().filter(r => r.status === 'DEGRADED').length);
+  downCount = computed(() => this._rows().filter(r => r.status === 'DOWN').length);
+  totalCount = computed(() => this._rows().length);
 
-  async ngOnInit() {
+  progressPct() {
+    const done = this._done();
+    const total = this._total();
+    return total > 0 ? Math.round((done / total) * 100) : 0;
+  }
+
+  ngOnInit(): void {
+    this.svc.loadAssets()
+      .then(cfg => {
+        const rows = this.svc.buildRows(cfg);
+        this._rows.set(rows);
+
+        // Kick off initial health checks in parallel
+        this.bulkRefresh(rows);
+      })
+      .catch(err => {
+        this.error.set(err?.message ?? 'Failed to load assets/apis.json');
+      })
+      .finally(() => this.loadingCfg.set(false));
+  }
+
+  onQuery(value: string) {
+    this._query.set((value || '').toLowerCase().trim());
+  }
+
+  // open details dialog
+  openDetails(row: EndpointRow) {
+    this.dialog.open(ApiDetailsDialogComponent, {
+      data: {
+        name: row.name,
+        method: row.method,
+        url: row.url,
+        environment: row.environment,
+        status: row.status,
+        latencyMs: row.latencyMs
+      },
+      panelClass: 'api-details-panel',
+      autoFocus: false,
+      width: '720px',
+      maxWidth: '95vw'
+    });
+  }
+
+  // open endpoint in new tab
+  open(row: EndpointRow) {
+    window.open(row.url, '_blank', 'noopener,noreferrer');
+  }
+
+  // retry a single row
+  async retryRow(row: EndpointRow) {
     try {
-      this.loadingCfg.set(true);
-
-      // 1) Load config and build rows (FAST). Render immediately.
-      const cfg = await this.health.loadAssets();
-      const base = this.health.buildRows(cfg);
-      const enriched: ApiRow[] = base.map(r => {
-        const u = parseUrl(r.url);
-        return { ...r, baseUrl: u.base, path: u.path, environment: u.env ?? 'Production' };
-      });
-
-      this.rows.set(enriched);
-      this.loadingCfg.set(false);     // <-- let Angular paint the table NOW
-
-      // 2) Start health checks in the background (do NOT await)
-      this.runHealthSweep(enriched);  // <-- fire-and-forget
-
-    } catch (e: any) {
-      this.error.set(e?.message ?? 'Failed to load API configuration.');
-      this.loadingCfg.set(false);
+      const updated = await this.svc.check(row);
+      const next = this._rows().map(r => (r.url === updated.url && r.method === updated.method) ? updated : r);
+      this._rows.set(next);
+      this.lastCheckedAt.set(new Date());
+    } catch {
+      // ignore
     }
   }
 
-  async runHealthSweep(all: ApiRow[], concurrency = 6) {
-    this.totalToCheck.set(all.length);
-    this.checkedSoFar.set(0);
+  // refresh all rows and show progress
+  async refreshAll() {
+    await this.bulkRefresh(this._rows());
+  }
 
-    await parallelMap(all, concurrency, async (row) => {
-      const updated = await this.health.check(row);
-      this.rows.update(list =>
-        list.map(x => x.url === updated.url ? { ...x, status: updated.status, latencyMs: updated.latencyMs } : x)
-      );
-      this.checkedSoFar.update(n => n + 1);
-    });
+  private async bulkRefresh(rows: EndpointRow[]) {
+    this.inProgress.set(true);
+    this._done.set(0);
+    this._total.set(rows.length);
+
+    await Promise.all(rows.map(async r => {
+      try {
+        const updated = await this.svc.check(r);
+        const next = this._rows().map(x => (x.url === updated.url && x.method === updated.method) ? updated : x);
+        this._rows.set(next);
+      } finally {
+        this._done.update(n => n + 1);
+      }
+    }));
 
     this.lastCheckedAt.set(new Date());
+    this.inProgress.set(false);
   }
 
-  // UI handlers
-  onQuery(v: string) { this.query.set(v); }
-  refreshAll() { void this.runHealthSweep(this.rows()); }
-  retryRow(r: ApiRow) { void this.runHealthSweep([r], 1); }
-  open(r: ApiRow) { window.open(r.url, '_blank', 'noopener'); }
+  // status pill class (matches your older style)
+  statusClass(s: HealthStatus) {
+    return {
+      ok: s === 'UP',
+      warn: s === 'DEGRADED',
+      down: s === 'DOWN'
+    };
+  }
 }
 
-/* helpers */
-function parseUrl(full: string): { base: string; path: string; env?: string } {
+/** Split an absolute or proxied URL into baseUrl + path for display */
+function splitUrl(full: string): { baseUrl: string; path: string } {
   try {
-    const u = new URL(full);
-    const base = `${u.protocol}//${u.host}`;
-    const path = u.pathname + (u.search || '');
-    const host = u.host.toLowerCase();
-    let env: string | undefined;
-    if (host.includes('dev')) env = 'Development';
-    else if (host.includes('test')) env = 'Test';
-    else if (host.includes('staging') || host.includes('stg')) env = 'Staging';
-    return { base, path, env };
+    // Handles absolute URLs like "https://host/path?x=y"
+    const u = new URL(full, window.location.origin);
+    return { baseUrl: `${u.origin}`, path: `${u.pathname}${u.search || ''}` };
   } catch {
-    const i = full.indexOf('/', 8);
-    return { base: i > 0 ? full.slice(0, i) : full, path: i > 0 ? full.slice(i) : '/' };
-  }
-}
-
-async function parallelMap<T>(items: T[], concurrency: number, worker: (item: T) => Promise<void>): Promise<void> {
-  const q = [...items];
-  const runners: Promise<void>[] = [];
-  for (let i = 0; i < Math.min(concurrency, q.length); i++) {
-    runners.push((async function run() {
-      while (q.length) {
-        const next = q.shift()!;
-        try { await worker(next); } catch {}
+    // For same-origin proxy paths like "/qa-api/claims/api/..." (no origin)
+    if (full.startsWith('/')) {
+      const idx = full.indexOf('/', 1);
+      if (idx > 0) {
+        // prefix as "base", remainder as path
+        const prefix = full.substring(0, idx);
+        const rest = full.substring(idx);
+        return { baseUrl: prefix, path: rest };
       }
-    })());
+      return { baseUrl: '/', path: full };
+    }
+    // Fallback: entire string as path
+    return { baseUrl: '', path: full };
   }
-  await Promise.all(runners);
 }
-

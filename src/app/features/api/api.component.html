@@ -12,31 +12,54 @@
     <div class="right">
       <mat-form-field appearance="outline" class="search-field" subscriptSizing="dynamic">
         <mat-label>Search</mat-label>
-<input matInput type="text"
-       [value]="query()"
-       (input)="onQuery($any($event.target).value)" />
-
+        <input
+          matInput
+          type="text"
+          [value]="query()"
+          (input)="onQuery($any($event.target).value)" />
         <button *ngIf="query()" matSuffix mat-icon-button aria-label="Clear" (click)="onQuery('')">
           <mat-icon>close</mat-icon>
         </button>
       </mat-form-field>
 
-      <button mat-stroked-button class="refresh-btn" matTooltip="Re-run health checks" (click)="refreshAll()">
+      <button
+        mat-stroked-button
+        class="refresh-btn"
+        matTooltip="Re-run health checks"
+        (click)="refreshAll()">
         <mat-icon>refresh</mat-icon>
         Refresh
       </button>
     </div>
   </mat-card-header>
 
-  <!-- Progress -->
-  <mat-progress-bar *ngIf="inProgress()" mode="determinate" [value]="progressPct()" class="progress"></mat-progress-bar>
+  <!-- Progress (in its own row; never overlaps the header) -->
+  <div class="progress-wrap" *ngIf="inProgress()">
+    <mat-progress-bar
+      mode="determinate"
+      [value]="progressPct()"
+      class="progress">
+    </mat-progress-bar>
+  </div>
 
   <!-- Summary tiles -->
   <section class="stats">
-    <div class="tile ok"><div class="dot"></div><div class="meta"><span class="label">UP</span><span class="value">{{ upCount() }}</span></div></div>
-    <div class="tile warn"><div class="dot"></div><div class="meta"><span class="label">DEGRADED</span><span class="value">{{ degradedCount() }}</span></div></div>
-    <div class="tile down"><div class="dot"></div><div class="meta"><span class="label">DOWN</span><span class="value">{{ downCount() }}</span></div></div>
-    <div class="tile total"><div class="badge">Σ</div><div class="meta"><span class="label">TOTAL</span><span class="value">{{ totalCount() }}</span></div></div>
+    <div class="tile ok">
+      <div class="dot"></div>
+      <div class="meta"><span class="label">UP</span><span class="value">{{ upCount() }}</span></div>
+    </div>
+    <div class="tile warn">
+      <div class="dot"></div>
+      <div class="meta"><span class="label">DEGRADED</span><span class="value">{{ degradedCount() }}</span></div>
+    </div>
+    <div class="tile down">
+      <div class="dot"></div>
+      <div class="meta"><span class="label">DOWN</span><span class="value">{{ downCount() }}</span></div>
+    </div>
+    <div class="tile total">
+      <div class="badge">Σ</div>
+      <div class="meta"><span class="label">TOTAL</span><span class="value">{{ totalCount() }}</span></div>
+    </div>
   </section>
 
   <mat-card-content>
@@ -46,13 +69,15 @@
     <div class="table-wrap" *ngIf="!loadingCfg() && !error()">
       <table mat-table [dataSource]="filteredRows()" class="mat-elevation-z0 api-table">
 
-        <!-- Name (two-line: name + url path) -->
+        <!-- Name -->
         <ng-container matColumnDef="name">
           <th mat-header-cell *matHeaderCellDef class="sticky"> Name </th>
           <td mat-cell *matCellDef="let r" class="sticky">
             <div class="cell-name">
               <div class="title">{{ r.name }}</div>
-              <div class="sub"><a class="url-link" [href]="r.baseUrl" target="_blank" rel="noopener">{{ r.baseUrl }}</a>{{ r.path }}</div>
+              <div class="sub">
+                <a class="url-link" [href]="r.baseUrl + r.path" target="_blank" rel="noopener">{{ r.baseUrl }}</a>{{ r.path }}
+              </div>
             </div>
           </td>
         </ng-container>
@@ -67,7 +92,7 @@
         <ng-container matColumnDef="status">
           <th mat-header-cell *matHeaderCellDef> Status </th>
           <td mat-cell *matCellDef="let r">
-            <span class="status" [ngClass]="{'ok': r.status==='UP', 'warn': r.status==='DEGRADED', 'down': r.status==='DOWN'}">
+            <span class="status" [ngClass]="statusClass(r.status)">
               <span class="dot"></span>{{ r.status }}
             </span>
           </td>
@@ -84,8 +109,8 @@
           <th mat-header-cell *matHeaderCellDef></th>
           <td mat-cell *matCellDef="let r" class="actions">
             <button mat-icon-button matTooltip="Details" (click)="openDetails(r)">
-  <mat-icon>info</mat-icon>
-</button>
+              <mat-icon>info</mat-icon>
+            </button>
             <button mat-icon-button matTooltip="Open endpoint" (click)="open(r)">
               <mat-icon>open_in_new</mat-icon>
             </button>
