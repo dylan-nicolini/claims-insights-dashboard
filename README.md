@@ -1,35 +1,34 @@
-# ClaimsInsightsDashboard
+# Claims Insights Dashboard
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.3.2.  
-It’s a branded Angular Material app that monitors API health across environments (Dev / Test / Staging / Prod).  
-The dashboard renders immediately from `assets/apis.json`, then runs parallel health checks in the background.  
-An API details dialog provides **HTTP status code**, a small set of **response headers**, and a **history of the last 5 checks**.
+A lightweight Angular app for monitoring API health across multiple environments (Development / Test / Staging / Production).  
+The dashboard renders immediately from `assets/apis.json`, then runs parallel health checks in the background (Web Worker).  
+An API details dialog shows **HTTP status code**, selected **response headers**, and a **history of the last 5 checks**.
 
 ---
 
 ## Table of Contents
 
-- [Prerequisites](#prerequisites)  
-- [Quick Start (Clone & Run)](#quick-start-clone--run)  
-- [Development Server](#development-server)  
-- [Editing `assets/apis.json` (Add Your URLs)](#editing-assetsapisjson-add-your-urls)  
-  - [Selective QA Health URL Example](#selective-qa-health-url-example)  
-  - [Multiple Environments Example](#multiple-environments-example)  
-  - [Verifying Your Endpoint](#verifying-your-endpoint)  
-- [Code Scaffolding](#code-scaffolding)  
-- [Building](#building)  
-- [Running Unit Tests](#running-unit-tests)  
-- [Running End-to-End Tests](#running-end-to-end-tests)  
-- [Project Structure](#project-structure)  
-- [Branding & Theming](#branding--theming)  
-- [Troubleshooting](#troubleshooting)  
-- [Additional Resources](#additional-resources)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Development Server](#development-server)
+- [Development Proxy (avoid CORS locally)](#development-proxy-avoid-cors-locally)
+- [Editing `assets/apis.json`](#editing-assetsapisjson)
+  - [Single-env entries](#singleenv-entries)
+  - [Multi-env mapping (DRY)](#multienv-mapping-dry)
+  - [Absolute URL overrides](#absolute-url-overrides)
+  - [Validating your changes](#validating-your-changes)
+- [Code Scaffolding](#code-scaffolding)
+- [Building](#building)
+- [Running Unit Tests](#running-unit-tests)
+- [Project Structure](#project-structure)
+- [Branding & Theming](#branding--theming)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
 ## Prerequisites
 
-- **Node.js**: v20.19+ (or v22.12+).  
+- **Node.js**: v20.19+ (or v22.12+)  
   Check:
   ```bash
   node -v
@@ -39,11 +38,9 @@ An API details dialog provides **HTTP status code**, a small set of **response h
   ```bash
   npm i -g @angular/cli@20
   ```
-- **Git**: any recent version.
 
 > **Windows & Node versions**  
-> If you need to manage Node versions on Windows, install **nvm-windows**:  
-> https://github.com/coreybutler/nvm-windows  
+> To manage Node versions on Windows, install **nvm-windows** (Corey Butler).  
 > ```powershell
 > nvm install 20.19.0
 > nvm use 20.19.0
@@ -52,147 +49,149 @@ An API details dialog provides **HTTP status code**, a small set of **response h
 
 ---
 
-## Quick Start (Clone & Run)
+## Quick Start
 
 ```bash
-git clone https://github.com/dylan-nicolini/claimsinsightshub.git
-cd claimsinsightshub
-npm ci      # or: npm install
-ng serve
+# From the project folder:
+npm ci          # or: npm install
+
+# Start the dev server with the proxy (recommended):
+ng serve --proxy-config ./proxy.conf.json
+
+# Open the app:
+http://localhost:4200/
 ```
 
-Open: **http://localhost:4200**
+The app hot-reloads when source files change.
 
 ---
 
 ## Development Server
 
-To start a local development server, run:
-
 ```bash
 ng serve
 ```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`.  
-The application will automatically reload whenever you modify any of the source files.
+Open `http://localhost:4200/`.  
+If you call remote APIs from the browser, use the **dev proxy** (next section) to avoid CORS issues.
 
 ---
 
-## Editing `assets/apis.json` (Add Your URLs)
+## Development Proxy (avoid CORS locally)
 
-The dashboard reads `src/assets/apis.json`, renders the list immediately, and then performs health checks in parallel.
+During development, the UI calls **relative** paths such as `/qa-api/claims/api/...`.  
+The proxy rewrites those to your real targets and sets `changeOrigin`, so CORS is not required on the remote side.
 
-**File path:** `src/assets/apis.json`
-
-**Shape:**
+**`proxy.conf.json`**
 ```json
 {
-  "endpoints": [
-    {
-      "name": "Service • Endpoint (Env)",
-      "method": "GET",
-      "url": "https://example.org/health",
-      "environment": "Production"
-    }
-  ]
+  "/dev-api":  { "target": "https://services-claims-dev.selective.com",     "secure": true, "changeOrigin": true, "pathRewrite": { "^/dev-api": "" },  "logLevel": "debug" },
+  "/qa-api":   { "target": "https://services-claims-qa.selective.com",      "secure": true, "changeOrigin": true, "pathRewrite": { "^/qa-api": "" },   "logLevel": "debug" },
+  "/stg-api":  { "target": "https://services-claims-staging.selective.com", "secure": true, "changeOrigin": true, "pathRewrite": { "^/stg-api": "" },  "logLevel": "debug" },
+  "/prod-api": { "target": "https://services-claims.selective.com",         "secure": true, "changeOrigin": true, "pathRewrite": { "^/prod-api": "" }, "logLevel": "debug" },
+
+  "/httpbin":  { "target": "https://httpbin.org", "secure": true, "changeOrigin": true, "pathRewrite": { "^/httpbin": "" }, "logLevel": "debug" }
 }
 ```
 
-> **Notes**
->
-> - `method` supports: `GET | POST | PUT | DELETE | PATCH | HEAD` (most health URLs are `GET`).
-> - `environment` is optional, but recommended to display environment-specific tiles & filters.
-> - Status rules:
->   - **UP**: HTTP success and latency under a threshold.
->   - **DEGRADED**: HTTP success but high latency (~>1200 ms by default).
->   - **DOWN**: HTTP error/timeout/fetch failure.
-> - The **Details** dialog supports a “Re-check (detailed)” that captures **HTTP code** and a few **headers** for the last 5 checks.
-
-### Selective QA Health URL Example
-
-If your health endpoint is:
-
-```
-https://services-claims-qa.selective.com/claims/apis/process/policy/health
+Run with:
+```bash
+ng serve --proxy-config ./proxy.conf.json
 ```
 
-Add it like this:
+**Where are proxy logs?**  
+In the **same terminal** running `ng serve`. You’ll see messages (and errors like `getaddrinfo ENOTFOUND …`) whenever requests are forwarded.
+
+> In hosted environments the proxy does **not** exist. Ensure your real APIs allow the app origin or are deployed under the same domain.
+
+---
+
+## Editing `assets/apis.json`
+
+The dashboard reads `src/assets/apis.json`, renders rows immediately, and then performs health checks in parallel.
+
+### Single-env entries
 
 ```json
 {
+  "environments": {
+    "Development": { "base": "/dev-api/claims/api" },
+    "Test":        { "base": "/qa-api/claims/api" },
+    "Staging":     { "base": "/stg-api/claims/api" },
+    "Production":  { "base": "/prod-api/claims/api" },
+    "Sandbox":     { "base": "/httpbin" }
+  },
+
   "endpoints": [
     {
       "name": "Policy • Process (QA)",
       "method": "GET",
-      "url": "https://services-claims-qa.selective.com/claims/apis/process/policy/health",
-      "environment": "Test"
+      "environment": "Test",
+      "path": "/process/policy/health"
+    },
+    {
+      "name": "HTTPBin • 200 OK",
+      "method": "GET",
+      "environment": "Sandbox",
+      "path": "/status/200"
     }
   ]
 }
 ```
 
-This endpoint should return **HTTP 200 OK**; the body may include a keyword like “health” or “OK”.  
-(The app primarily evaluates HTTP success and latency. DEGRADED uses latency thresholds.)
+The app builds final URLs as **base + path** using the selected environment’s base.
 
-### Multiple Environments Example
+### Multi-env mapping (DRY)
+
+Avoid duplicating similar rows by mapping a single endpoint to **multiple environments**:
 
 ```json
 {
-  "endpoints": [
-    {
-      "name": "Policy • Process (Dev)",
-      "method": "GET",
-      "url": "https://services-claims-dev.selective.com/claims/apis/process/policy/health",
-      "environment": "Development"
-    },
-    {
-      "name": "Policy • Process (QA)",
-      "method": "GET",
-      "url": "https://services-claims-qa.selective.com/claims/apis/process/policy/health",
-      "environment": "Test"
-    },
-    {
-      "name": "Policy • Process (Staging)",
-      "method": "GET",
-      "url": "https://services-claims-stg.selective.com/claims/apis/process/policy/health",
-      "environment": "Staging"
-    },
-    {
-      "name": "Policy • Process (Prod)",
-      "method": "GET",
-      "url": "https://services-claims.selective.com/claims/apis/process/policy/health",
-      "environment": "Production"
-    }
-  ]
+  "name": "Policy • Process",
+  "method": "GET",
+  "environments": {
+    "Development": { "path": "/process/policy/health" },
+    "Test":        { "path": "/process/policy/health" },
+    "Staging":     { "path": "/process/policy/health" },
+    "Production":  { "path": "/process/policy/health" }
+  }
 }
 ```
 
-> **Tip:** Keep names consistent: `Domain • Endpoint (Env)` reads well in the table and dialog.
+The app expands this into four internal rows (one per environment).  
+You can also override a specific environment with a full `url` if needed.
 
-### Verifying Your Endpoint
+### Absolute URL overrides
+
+If you need a one-off entry that bypasses `base + path`, specify `url`:
+
+```json
+{
+  "name": "Identity • Token (QA override)",
+  "method": "GET",
+  "environment": "Test",
+  "url": "https://httpbin.org/get?svc=identity&ep=token&env=test"
+}
+```
+
+### Validating your changes
 
 1. Edit `src/assets/apis.json` and save.  
-2. Reload the app (auto-reload usually suffices).  
-3. The new row appears immediately; health/latency fill in as checks complete.  
-4. Click the **info** icon to open the **Details** dialog and press **Re-check (detailed)** to capture **HTTP code** and **headers**.
+2. Reload the app (hot reload usually suffices).  
+3. The new row shows immediately; health and latency fill in as checks complete.  
+4. Click **Details** (info icon) → **Re-check (detailed)** to capture **HTTP code**, **headers**, and update **Last 5 checks**.
 
-> **CORS**  
-> If your endpoint doesn’t allow requests from `http://localhost:4200`, the browser will block it and you’ll see **DOWN**.  
-> For internal environments, add CORS for the app origin or proxy through an internal gateway.
+**Status rules (defaults):**
+- **UP** – HTTP success and latency under threshold  
+- **DEGRADED** – HTTP success but high latency  
+- **DOWN** – HTTP error / timeout / network failure
 
 ---
 
 ## Code Scaffolding
 
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
 ```bash
 ng generate component component-name
-```
-
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
-
-```bash
+# For more options:
 ng generate --help
 ```
 
@@ -200,41 +199,20 @@ ng generate --help
 
 ## Building
 
-To build the project run:
-
 ```bash
 ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory.  
-By default, the production build optimizes your application for performance and speed.
-
-**Production build:**
-```bash
+# or production:
 ng build --configuration production
 ```
+Build artifacts land in `dist/`.
 
 ---
 
 ## Running Unit Tests
 
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use:
-
 ```bash
 ng test
 ```
-
----
-
-## Running End-to-End Tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
 
 ---
 
@@ -257,59 +235,53 @@ src/
         dashboard.component.scss
         dashboard-health.service.ts
   assets/
-    apis.json                 <-- add/edit your endpoints here
+    apis.json                 <-- edit your endpoints here
   theme/
     selective.css             <-- brand tokens / global styling
 ```
 
-- **Dashboard**: Executive tiles (UP / DEGRADED / DOWN / Success Rate / Avg & p95 Latency) and a latency **sparkline** for the latest sweep.  
-- **API**: Branded grid of endpoints with **status pills**, **latency**, and action buttons (Open / Re-check / Details).  
-- **Details dialog**: Shows **HTTP code**, a small set of **response headers**, and **Last 5 checks** with timestamps.
+- **Dashboard**: tiles (UP / DEGRADED / DOWN / TOTAL), optional latency insight.  
+- **API**: searchable grid with status pills, latency, and actions (Details / Open / Re-check).  
+- **Details dialog**: shows environment, method, URL, last latency, selected response headers, and the last 5 checks.
 
 ---
 
 ## Branding & Theming
 
-Brand tokens live in `src/theme/selective.css` (plain CSS variables), which drive:
+Brand tokens live in `src/theme/selective.css` (CSS variables) and drive:
 
-- Toolbar, sidenav, cards, borders, shadows, radii  
-- Material controls (buttons, inputs, progress, chips)  
-- Status colors: **UP**, **DEGRADED**, **DOWN**
+- Typography, colors, borders, radii, shadows  
+- Material component accents (buttons, inputs, progress, chips)  
+- Status colors for **UP**, **DEGRADED**, **DOWN**
 
-To align tighter with selective.com, adjust:
-- Colors: `--sel-ink`, `--sel-muted`, `--sel-accent`, `--sel-divider`
-- Shape/elevation: `--sel-radius-md`, `--sel-radius-lg`, `--sel-shadow-card`
+Adjust variables like:
+- `--sel-ink`, `--sel-muted`, `--sel-accent`, `--sel-divider`
+- `--sel-radius-md`, `--sel-radius-lg`, `--sel-shadow-card`
 
 ---
 
 ## Troubleshooting
 
 **Node.js version error**  
-> *“The Angular CLI requires a minimum Node.js version of v20.19 or v22.12.”*  
-Use `nvm` to install/use Node 20.19+ (or upgrade your local Node installation).
+> “The Angular CLI requires a minimum Node.js version of v20.19 or v22.12.”  
+Install a newer Node version (see prerequisites).
 
-**`assets/apis.json` 404**  
-- Ensure `src/assets/apis.json` exists.  
-- In `angular.json`, verify:
+**`assets/apis.json` 404 or parse error**  
+- Ensure the file exists at `src/assets/apis.json`.  
+- In `angular.json`, the app’s build options should include:
   ```json
   "assets": ["src/favicon.ico", "src/assets"]
   ```
+- Validate JSON (no trailing commas or missing braces).
 
-**Slow first paint**  
-- The app renders **before** checks begin; if it still feels slow, ensure endpoints are reachable and consider lowering sweep concurrency in the service (default ~6).
+**Proxy doesn’t seem to run**  
+- Start the server **with** the proxy flag:  
+  `ng serve --proxy-config ./proxy.conf.json`  
+- Look for proxy logs/errors in the **terminal** running `ng serve`.  
+- Ensure your `base` values start with the configured prefixes (e.g., `/qa-api`, `/httpbin`).
 
-**CORS / 401 / 403**  
-- Browser-based fetching requires CORS; expose a non-auth health path or proxy the calls.
+**CORS in production**  
+The dev proxy only exists locally. In hosted environments, APIs must (a) share origin with the app or (b) allow the app’s origin via CORS.
 
 **Dialog overflow / horizontal scroll**  
-- The dialog CSS forces **vertical-only** scroll and wraps long URLs/headers; ensure you have the latest `api-details.dialog.scss`.
-
----
-
-## Additional Resources
-
-- [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli)  
-- [Angular Material](https://material.angular.io/)  
-- [CORS Guide (MDN)](https://developer.mozilla.org/docs/Web/HTTP/CORS)
-
----
+The dialog forces vertical scrolling and wraps long values. If you still see horizontal scroll, update the dialog SCSS and ensure long URLs/headers use `word-break: break-all;`.
